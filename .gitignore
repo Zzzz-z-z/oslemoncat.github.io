@@ -21,3 +21,9 @@ content/generated/_preview/
 *token*.txt
 # API 上传进度检查点
 .push-progress.json
+
+# CMS build output and authentication secrets
+dist/
+auth/.dev.vars
+auth/.env
+auth/.wrangler/

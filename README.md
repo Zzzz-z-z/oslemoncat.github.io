@@ -1,5 +1,9 @@
 # oslemoncat.github.io
 
+> 本地接入版已增加 `/admin/` 文章后台、Cloudflare GitHub 登录与自动发布。
+> 请先阅读 [CMS_SETUP.md](CMS_SETUP.md)。后台编辑源是 `content/posts/`；
+> GitHub Actions 自动生成和发布 `dist/`。下方记录的是接入前的静态版维护方式。
+
 个人知识库站点：把课程笔记整理成「首页 → 知识模块 → 文章详情」的结构，托管在 GitHub Pages 上。
 
 - **纯静态、零构建**：不需要 Node、不需要打包，仓库里的文件就是线上运行的文件。
