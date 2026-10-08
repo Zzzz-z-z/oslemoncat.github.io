@@ -1,0 +1,10 @@
+{
+  "title": "向量、平面与直线：空间解析几何的代数化",
+  "summary": "从向量的两种定义出发，推导平面的点法式与一般式、直线的参数式与对称式，并把「夹角、距离、位置关系」三类问题归约为一次计算。",
+  "module": "linear-algebra",
+  "date": "2026-09-22",
+  "updated": "2026-09-22",
+  "tags": ["向量", "平面方程", "空间直线", "数量积"],
+  "cover": "assets/images/linear-algebra-vectors-and-planes/cover.svg",
+  "order": 10
+}

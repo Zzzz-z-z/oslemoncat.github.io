@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img">
+  <defs>
+    <linearGradient id="gLA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b1c30"/>
+      <stop offset="1" stop-color="#210f1c"/>
+    </linearGradient>
+    <marker id="laArrow" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto">
+      <path d="M0 0 L11 5.5 L0 11 z" fill="#ff8fc0"/>
+    </marker>
+    <marker id="laArrowDim" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto">
+      <path d="M0 0 L11 5.5 L0 11 z" fill="#c06090"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="675" fill="url(#gLA)"/>
+  <!-- 透视网格表示 xOy 平面 -->
+  <g stroke="#5c3248" stroke-width="1.2" opacity="0.85" fill="none">
+    <path d="M120 470 L 980 240"/>
+    <path d="M120 520 L 980 290"/>
+    <path d="M120 570 L 980 340"/>
+    <path d="M120 620 L 980 390"/>
+    <path d="M300 640 L 300 400"/>
+    <path d="M480 590 L 480 350"/>
+    <path d="M660 540 L 660 300"/>
+    <path d="M840 490 L 840 250"/>
+  </g>
+  <!-- 平面内向量 -->
+  <g stroke="#ff8fc0" stroke-width="5" fill="none" stroke-linecap="round">
+    <path d="M200 600 L 560 500" marker-end="url(#laArrow)"/>
+    <path d="M560 500 L 860 414" marker-end="url(#laArrow)"/>
+  </g>
+  <!-- 法向量 -->
+  <g stroke="#8f6fd0" stroke-width="5" fill="none" stroke-linecap="round">
+    <path d="M560 500 L 560 210" marker-end="url(#laArrowDim)"/>
+  </g>
+  <!-- 分解虚线与投影 -->
+  <g stroke="#a98fd0" stroke-width="2.4" fill="none" stroke-dasharray="9 7" opacity="0.9">
+    <path d="M560 210 L 470 246"/>
+    <path d="M560 500 L 470 246"/>
+  </g>
+  <circle cx="200" cy="600" r="8" fill="#ffd0e4"/>
+  <circle cx="560" cy="500" r="9" fill="#ff8fc0"/>
+  <circle cx="860" cy="414" r="8" fill="#ffd0e4"/>
+  <circle cx="560" cy="210" r="8" fill="#c9a2f5"/>
+  <circle cx="470" cy="246" r="9" fill="#ffffff"/>
+  <!-- 标签 -->
+  <text x="392" y="578" fill="#ffd0e4" font-size="34" font-family="Cambria Math, Georgia, serif">a</text>
+  <text x="726" y="474" fill="#ffd0e4" font-size="34" font-family="Cambria Math, Georgia, serif">b</text>
+  <text x="512" y="384" fill="#c9a2f5" font-size="34" font-family="Cambria Math, Georgia, serif">n</text>
+  <text x="1000" y="352" fill="#a98fd0" font-size="30" font-family="Cambria Math, Georgia, serif">xOy</text>
+</svg>

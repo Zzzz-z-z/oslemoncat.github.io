@@ -1,0 +1,10 @@
+{
+  "title": "数列极限的 ε-N 定义：从直觉到严格证明",
+  "summary": "把「无限接近」翻译成可验证的不等式：ε-N 定义的逻辑结构、判断收敛的四条常用路径，以及极限唯一性与有界性的证明思路。",
+  "module": "math-analysis",
+  "date": "2026-09-14",
+  "updated": "2026-10-08",
+  "tags": ["数列极限", "ε-N 语言", "单调有界定理", "Apostol"],
+  "cover": "assets/images/apostol-sequence-limit/cover.svg",
+  "order": 10
+}

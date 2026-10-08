@@ -1,0 +1,23 @@
+# 统一换行符，避免 Windows 用户的 CRLF 让仓库反复出现「整文件改动」
+* text=auto eol=lf
+
+# 二进制/资源文件不参与换行转换
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.woff binary
+*.woff2 binary
+*.pdf  binary
+*.zip  binary
+
+# 明确语法类型，便于 GitHub 高亮与 diff
+*.md   text
+*.json text
+*.js   text
+*.css  text
+*.html text
+*.svg  text
+*.py   text
+*.ps1  text
+*.yml  text

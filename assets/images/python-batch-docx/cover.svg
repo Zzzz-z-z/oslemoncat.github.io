@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img">
+  <defs>
+    <linearGradient id="gPy" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3a2c12"/>
+      <stop offset="1" stop-color="#1e1709"/>
+    </linearGradient>
+    <marker id="pyArrow" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto">
+      <path d="M0 0 L11 5.5 L0 11 z" fill="#e0b25a"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="675" fill="url(#gPy)"/>
+  <!-- 数据表 -->
+  <g>
+    <rect x="90" y="200" width="260" height="250" rx="10" fill="#2a2312" stroke="#6b5627" stroke-width="2.5"/>
+    <g stroke="#6b5627" stroke-width="2">
+      <path d="M90 264H350M90 328H350M90 392H350"/>
+      <path d="M177 200V450M264 200V450"/>
+    </g>
+    <g fill="#e8c97c" font-size="22" font-family="Consolas, monospace">
+      <text x="108" y="243">id</text>
+      <text x="196" y="243">name</text>
+      <text x="283" y="243">score</text>
+      <text x="108" y="307">01</text>
+      <text x="196" y="307">Alice</text>
+      <text x="283" y="307">92</text>
+      <text x="108" y="371">02</text>
+      <text x="196" y="371">Bob</text>
+      <text x="283" y="371">85</text>
+      <text x="108" y="432">03</text>
+      <text x="196" y="432">Cara</text>
+      <text x="283" y="432">78</text>
+    </g>
+  </g>
+  <!-- 生成箭头 -->
+  <g stroke="#e0b25a" stroke-width="4" fill="none" stroke-linecap="round">
+    <path d="M368 325 L 500 325" marker-end="url(#pyArrow)"/>
+  </g>
+  <text x="376" y="300" fill="#e8c97c" font-size="22" font-family="Consolas, monospace">python-docx</text>
+  <!-- 文档堆 -->
+  <g fill="#2a2312" stroke="#6b5627" stroke-width="2.5">
+    <rect x="560" y="120" width="200" height="260" rx="8" transform="rotate(-9 660 250)"/>
+    <rect x="620" y="160" width="200" height="260" rx="8" transform="rotate(-4 720 290)"/>
+    <rect x="690" y="205" width="205" height="265" rx="8" fill="#33290f"/>
+  </g>
+  <g fill="#e8c97c" font-size="20" font-family="Consolas, monospace" opacity="0.95">
+    <text x="716" y="256">01.docx</text>
+    <text x="716" y="300">02.docx</text>
+    <text x="716" y="344">03.docx</text>
+  </g>
+  <g stroke="#7a6330" stroke-width="2">
+    <path d="M716 275H860M716 319H860M716 363H860M716 407H860"/>
+  </g>
+  <!-- 循环指示 -->
+  <g stroke="#7a6330" stroke-width="2.5" fill="none" stroke-dasharray="8 7">
+    <path d="M905 340 C 990 340, 990 150, 905 150"/>
+    <path d="M905 150 C 860 150, 840 170, 840 200" marker-end="url(#pyArrow)"/>
+  </g>
+  <text x="960" y="470" fill="#8a7538" font-size="24" font-family="Consolas, monospace">for row in rows</text>
+</svg>

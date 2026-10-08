@@ -1,0 +1,23 @@
+# 操作系统与编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# 本地预览与服务
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+
+# 批量导入时的中间产物
+content/generated/_preview/
+*.tmp
+
+# 临时令牌文件（绝不可提交）
+.token-for-dsh.txt
+*token*.txt
+# API 上传进度检查点
+.push-progress.json

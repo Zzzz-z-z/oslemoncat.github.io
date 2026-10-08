@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img">
+  <defs>
+    <linearGradient id="gC" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f2b23"/>
+      <stop offset="1" stop-color="#091a16"/>
+    </linearGradient>
+    <marker id="cArrow" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto">
+      <path d="M0 0 L11 5.5 L0 11 z" fill="#3fb08a"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="675" fill="url(#gC)"/>
+  <!-- 内存格 -->
+  <g fill="none" stroke="#2f6b58" stroke-width="2.5">
+    <rect x="700" y="150" width="130" height="92" rx="6"/>
+    <rect x="860" y="150" width="130" height="92" rx="6"/>
+    <rect x="700" y="280" width="130" height="92" rx="6"/>
+    <rect x="860" y="280" width="130" height="92" rx="6"/>
+    <rect x="700" y="410" width="130" height="92" rx="6"/>
+    <rect x="860" y="410" width="130" height="92" rx="6"/>
+  </g>
+  <g fill="#3fb08a" font-size="26" font-family="Consolas, monospace" opacity="0.9">
+    <text x="742" y="205">0x7ff</text>
+    <text x="902" y="205">0x803</text>
+    <text x="742" y="335">0x80b</text>
+    <text x="902" y="335">0x813</text>
+    <text x="742" y="465">0x81b</text>
+    <text x="902" y="465">0x823</text>
+  </g>
+  <!-- 指针箭头 -->
+  <g stroke="#3fb08a" stroke-width="4" fill="none" stroke-linecap="round">
+    <path d="M470 330 L 660 335" marker-end="url(#cArrow)"/>
+  </g>
+  <circle cx="470" cy="330" r="9" fill="#8ff0c8"/>
+  <text x="300" y="300" fill="#8ff0c8" font-size="40" font-family="Consolas, monospace">p</text>
+  <text x="366" y="360" fill="#8ff0c8" font-size="24" font-family="Consolas, monospace">→ 0x80b</text>
+  <!-- 左侧代码 -->
+  <g fill="#c9f2e2" font-size="27" font-family="Consolas, monospace">
+    <text x="90" y="180">int  a = 42;</text>
+    <text x="90" y="222">int *p = &amp;a;</text>
+    <text x="90" y="264">*p = 7;</text>
+  </g>
+  <g fill="#4d8f79" font-size="24" font-family="Consolas, monospace">
+    <text x="90" y="540">/* 地址 + 类型 */</text>
+  </g>
+</svg>

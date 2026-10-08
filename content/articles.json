@@ -1,0 +1,9 @@
+{
+  "_comment": "文章索引。新增文章时：1) 在 content/articles/ 下放 <slug>.md 与 <slug>.json；2) 把 slug 加进下面这个数组。生成的 generated/articles-index.json 存在时会优先使用它（见 README 的「批量导入」一节）。",
+  "articles": [
+    "apostol-sequence-limit",
+    "linear-algebra-vectors-and-planes",
+    "c-pointers-essentials",
+    "python-batch-docx"
+  ]
+}

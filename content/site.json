@@ -1,0 +1,18 @@
+{
+  "title": "oslemoncat 的知识库",
+  "shortTitle": "oslemoncat",
+  "description": "数学分析、线性代数、程序设计等课程学习笔记的整理与归档。",
+  "author": "oslemoncat",
+  "lang": "zh-CN",
+  "url": "https://oslemoncat.github.io",
+  "nav": [
+    { "label": "首页", "href": "#/" },
+    { "label": "知识模块", "href": "#/modules" },
+    { "label": "全部文章", "href": "#/articles" },
+    { "label": "关于", "href": "#/about" }
+  ],
+  "footer": {
+    "note": "内容以学习笔记为主，持续整理中。",
+    "icp": ""
+  }
+}

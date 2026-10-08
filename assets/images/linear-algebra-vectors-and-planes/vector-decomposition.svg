@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" width="720" height="420" role="img">
+  <defs>
+    <marker id="vdArrow" markerWidth="10" markerHeight="10" refX="8.5" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#3b6fd4"/>
+    </marker>
+    <marker id="vdArrowPurple" markerWidth="10" markerHeight="10" refX="8.5" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b6fd0"/>
+    </marker>
+    <marker id="vdArrowGray" markerWidth="10" markerHeight="10" refX="8.5" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#868d9b"/>
+    </marker>
+  </defs>
+  <rect width="720" height="420" fill="#ffffff"/>
+  <!-- 平面示意（平行四边形） -->
+  <path d="M90 300 L 430 210 L 650 300 L 310 390 Z" fill="#eef2fb" stroke="#c8d4ee" stroke-width="2"/>
+  <text x="600" y="332" fill="#9aa6bd" font-size="22" font-family="Georgia, serif">平面</text>
+  <!-- 基向量 -->
+  <g stroke="#868d9b" stroke-width="3" fill="none" stroke-linecap="round">
+    <path d="M180 340 L 420 280" marker-end="url(#vdArrowGray)"/>
+    <path d="M180 340 L 320 396" marker-end="url(#vdArrowGray)"/>
+  </g>
+  <text x="430" y="284" fill="#868d9b" font-size="24" font-family="Georgia, serif">e</text>
+  <text x="330" y="420" fill="#868d9b" font-size="24" font-family="Georgia, serif">f</text>
+  <!-- 原向量 a -->
+  <path d="M180 340 L 430 110" stroke="#3b6fd4" stroke-width="4.5" fill="none" stroke-linecap="round" marker-end="url(#vdArrow)"/>
+  <text x="404" y="122" fill="#3b6fd4" font-size="28" font-family="Georgia, serif">a</text>
+  <!-- 法向量 n -->
+  <path d="M400 212 L 400 60" stroke="#8b6fd0" stroke-width="4" fill="none" stroke-linecap="round" marker-end="url(#vdArrowPurple)"/>
+  <text x="412" y="76" fill="#8b6fd0" font-size="26" font-family="Georgia, serif">n</text>
+  <!-- 分解：a 的终点在平面上的位置 Q -->
+  <g stroke="#b8c2d6" stroke-width="2" fill="none" stroke-dasharray="8 6">
+    <path d="M430 110 L 400 212"/>
+  </g>
+  <path d="M400 212 L 400 60" stroke="#8b6fd0" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <circle cx="180" cy="340" r="6.5" fill="#3b6fd4"/>
+  <circle cx="430" cy="110" r="6" fill="#3b6fd4"/>
+  <circle cx="400" cy="212" r="7" fill="#8b6fd0"/>
+  <!-- 法向分量标注 -->
+  <path d="M400 212 L 400 60" stroke="#d9c8f5" stroke-width="1"/>
+  <text x="352" y="150" fill="#8b6fd0" font-size="22" font-family="Georgia, serif">a</text>
+  <text x="368" y="170" fill="#8b6fd0" font-size="16" font-family="Georgia, serif">&#8869;</text>
+</svg>

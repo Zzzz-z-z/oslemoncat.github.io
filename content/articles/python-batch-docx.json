@@ -1,0 +1,10 @@
+{
+  "title": "用 python-docx 批量生成 Word 文档",
+  "summary": "把数据表和模板拼成一批 .docx：段落样式、表格、图片插入的常用写法，以及中文字体、页边距和批量重命名上的几个坑。",
+  "module": "python",
+  "date": "2026-09-08",
+  "updated": "2026-09-08",
+  "tags": ["Python", "python-docx", "批处理", "自动化"],
+  "cover": "assets/images/python-batch-docx/cover.svg",
+  "order": 10
+}

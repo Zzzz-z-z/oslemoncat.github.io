@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img">
+  <defs>
+    <linearGradient id="gMath" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d2b4a"/>
+      <stop offset="1" stop-color="#0f1729"/>
+    </linearGradient>
+    <linearGradient id="gAccent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5b8def"/>
+      <stop offset="1" stop-color="#8f6fd0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#gMath)"/>
+  <!-- 坐标网格 -->
+  <g stroke="#2c3a5c" stroke-width="1" opacity="0.7">
+    <path d="M100 120H1100M100 220H1100M100 320H1100M100 420H1100M100 520H1100"/>
+    <path d="M200 80V600M350 80V600M500 80V600M650 80V600M800 80V600M950 80V600"/>
+  </g>
+  <!-- 坐标轴 -->
+  <g stroke="#4a5f8f" stroke-width="2.5" fill="none">
+    <path d="M120 560H1080" marker-end="url(#arrowX)"/>
+    <path d="M160 600V100"/>
+  </g>
+  <defs>
+    <marker id="arrowX" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#4a5f8f"/>
+    </marker>
+  </defs>
+  <!-- 极限示意曲线 -->
+  <path d="M170 150 C 380 300, 600 500, 1050 536" fill="none" stroke="url(#gAccent)" stroke-width="4.5" stroke-linecap="round"/>
+  <!-- 极限带 -->
+  <rect x="120" y="512" width="960" height="48" fill="#5b8def" opacity="0.14"/>
+  <path d="M120 536H1080" stroke="#5b8def" stroke-width="2" stroke-dasharray="8 7"/>
+  <!-- 从第 N 项开始进入带内 -->
+  <path d="M700 100V600" stroke="#8f6fd0" stroke-width="2" stroke-dasharray="6 6" opacity="0.9"/>
+  <circle cx="700" cy="520" r="7" fill="#8f6fd0"/>
+  <circle cx="820" cy="530" r="7" fill="#8f6fd0"/>
+  <circle cx="950" cy="534" r="7" fill="#8f6fd0"/>
+  <circle cx="1050" cy="536" r="7" fill="#c9a2f5"/>
+  <circle cx="1050" cy="536" r="14" fill="none" stroke="#c9a2f5" stroke-width="2" opacity="0.55"/>
+  <!-- 文字 -->
+  <text x="700" y="646" fill="#93b6fd" font-size="30" font-family="Cambria Math, Georgia, serif" text-anchor="middle">n &gt; N</text>
+  <text x="1096" y="500" fill="#93b6fd" font-size="32" font-family="Cambria Math, Georgia, serif" text-anchor="end">L + &#949;</text>
+  <text x="1096" y="596" fill="#93b6fd" font-size="32" font-family="Cambria Math, Georgia, serif" text-anchor="end">L &#8722; &#949;</text>
+  <text x="150" y="486" fill="#c9a2f5" font-size="34" font-family="Cambria Math, Georgia, serif">a</text>
+  <text x="176" y="498" fill="#c9a2f5" font-size="22" font-family="Cambria Math, Georgia, serif">n</text>
+</svg>
