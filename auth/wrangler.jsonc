@@ -1,0 +1,13 @@
+{
+  "name": "lemoncat-cms-auth",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-08",
+  "workers_dev": true,
+  "vars": {
+    "CMS_ORIGIN": "https://oslemoncat.github.io",
+    "REPOSITORY": "oslemoncat/oslemoncat.github.io",
+    "ALLOWED_GITHUB_LOGIN": "oslemoncat",
+    "CALLBACK_URL": "https://lemoncat-cms-auth.zhounanxuan071106.workers.dev/callback",
+    "GITHUB_CLIENT_ID": "REPLACE-WITH-GITHUB-OAUTH-CLIENT-ID"
+  }
+}

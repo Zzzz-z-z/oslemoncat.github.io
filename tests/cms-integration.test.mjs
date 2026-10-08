@@ -1,0 +1,71 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, readFile, writeFile, access, rm } from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import YAML from 'yaml';
+import { fileURLToPath } from 'node:url';
+import { migrate } from '../scripts/cms-migrate.mjs';
+import { buildSite } from '../scripts/cms-build.mjs';
+import { parsePost, readPosts } from '../scripts/cms-content.mjs';
+const project = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+async function fixture() {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'oslemoncat-cms-test-'));
+  for (const folder of ['content/articles', 'content/posts', 'assets', 'js', 'admin']) await mkdir(path.join(root, folder), { recursive: true });
+  for (const name of ['index.html', '404.html', 'app.js', '.nojekyll']) await writeFile(path.join(root, name), 'fixture');
+  await writeFile(path.join(root, 'content/modules.json'), JSON.stringify([{ slug: 'math-analysis', title: '数学分析' }]));
+  await writeFile(path.join(root, 'content/site.json'), JSON.stringify({ nav: [] }));
+  await writeFile(path.join(root, 'admin/config.yml'), await readFile(path.join(project, 'admin/config.yml')));
+  return root;
+}
+async function cleanup(root) {
+  const target = path.resolve(root), temporaryRoot = path.resolve(os.tmpdir());
+  const relative = path.relative(temporaryRoot, target);
+  if (!relative.startsWith('oslemoncat-cms-test-') || relative.includes(path.sep) || path.isAbsolute(relative)) throw new Error('Invalid test cleanup path');
+  await rm(target, { recursive: true, force: true });
+}
+const metadata = slug => ({ slug, title: '标题', summary: '摘要', module: 'math-analysis', date: '2026-10-08', updated: '2026-10-08', tags: ['极限'], order: 0, draft: false });
+const savePost = (root, slug, meta, body) => writeFile(path.join(root, 'content/posts', `${slug}.md`), `---\n${YAML.stringify(meta)}---\n${body}`);
+test('Migration preserves Markdown and is safe to repeat', async () => {
+  const root = await fixture();
+  try {
+    const original = '## 数列\n\n$$a_n=1/n$$\n\n::: theorem 标题\n正文\n:::\n';
+    const { slug, ...meta } = metadata('sequence');
+    await writeFile(path.join(root, 'content/articles/sequence.json'), JSON.stringify(meta));
+    await writeFile(path.join(root, 'content/articles/sequence.md'), original);
+    assert.equal(await migrate(root), 1);
+    assert.equal(parsePost(await readFile(path.join(root, 'content/posts/sequence.md'), 'utf8'), 'sequence').body, original);
+    assert.equal(await migrate(root), 0);
+    assert.equal(await readFile(path.join(root, 'content/articles/sequence.md'), 'utf8'), original);
+  } finally { await cleanup(root); }
+});
+test('New articles populate both indexes and hidden posts are excluded', async () => {
+  const root = await fixture();
+  try {
+    await savePost(root, 'published', metadata('published'), '正文');
+    await savePost(root, 'draft-post', { ...metadata('draft-post'), draft: true }, '草稿正文');
+    await writeFile(path.join(root, 'content/articles/stale.md'), '旧文件');
+    const out = path.join(root, 'dist');
+    const result = await buildSite(root, out);
+    assert.equal(result.published, 1);
+    for (const file of ['content/articles.json', 'content/generated/articles-index.json']) assert.deepEqual(JSON.parse(await readFile(path.join(out, file), 'utf8')).articles, ['published']);
+    assert.equal(await readFile(path.join(out, 'content/articles/published.md'), 'utf8'), '正文');
+    await assert.rejects(access(path.join(out, 'content/articles/draft-post.md')));
+    await assert.rejects(access(path.join(out, 'content/articles/stale.md')));
+    await assert.rejects(access(path.join(out, 'content/posts')));
+    await assert.rejects(access(path.join(out, 'auth')));
+    const config = YAML.parse(await readFile(path.join(out, 'admin/config.yml'), 'utf8'));
+    assert.deepEqual(config.collections[0].fields.find(x => x.name === 'module').options, [{ label: '数学分析', value: 'math-analysis' }]);
+    const site = JSON.parse(await readFile(path.join(out, 'content/site.json'), 'utf8'));
+    assert.ok(site.nav.some(x => x.href === 'admin/'));
+  } finally { await cleanup(root); }
+});
+test('Unknown modules and changed slugs fail before publication', async () => {
+  const root = await fixture();
+  try {
+    await savePost(root, 'test-post', { ...metadata('test-post'), module: 'missing' }, '正文');
+    await assert.rejects(readPosts(root), /不存在的模块/);
+    await savePost(root, 'test-post', { ...metadata('different-slug') }, '正文');
+    await assert.rejects(readPosts(root), /slug 必须/);
+  } finally { await cleanup(root); }
+});

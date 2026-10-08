@@ -1,0 +1,92 @@
+backend:
+  name: github
+  repo: oslemoncat/oslemoncat.github.io
+  branch: main
+  # Replace with your deployed authentication Worker origin (no trailing slash).
+  base_url: https://lemoncat-cms-auth.zhounanxuan071106.workers.dev
+  auth_endpoint: auth
+
+locale: zh_Hans
+site_url: https://oslemoncat.github.io
+display_url: https://oslemoncat.github.io
+publish_mode: editorial_workflow
+show_preview_links: false
+media_folder: assets/images/uploads
+public_folder: /assets/images/uploads
+slug:
+  encoding: ascii
+  clean_accents: true
+
+collections:
+  - name: posts
+    label: 学习文章
+    label_singular: 文章
+    folder: content/posts
+    create: true
+    delete: true
+    extension: md
+    format: yaml-frontmatter
+    slug: '{{fields.slug}}'
+    identifier_field: slug
+    summary: '{{title}} · {{module}}'
+    editor:
+      preview: false
+    fields:
+      - label: 文章地址
+        name: slug
+        widget: string
+        hint: 使用小写英文、数字和短横线；发布后请保持不变。
+        pattern: ['^[a-z0-9]+(-[a-z0-9]+)*$', '例如 sequence-limits']
+      - { label: 标题, name: title, widget: string }
+      - { label: 摘要, name: summary, widget: text, required: false }
+      - label: 知识模块
+        name: module
+        widget: select
+        # cms-build.mjs synchronizes these options from content/modules.json.
+        options:
+          - { label: 数学分析, value: math-analysis }
+          - { label: 空间解析几何与线性代数, value: linear-algebra }
+          - { label: 程序设计, value: programming }
+          - { label: Python 与工具, value: python }
+          - { label: 学术写作, value: writing }
+          - { label: 杂记与效率, value: misc }
+      - { label: 首次发布日期, name: date, widget: datetime, format: YYYY-MM-DD, date_format: YYYY-MM-DD, time_format: false }
+      - { label: 更新日期, name: updated, widget: datetime, format: YYYY-MM-DD, date_format: YYYY-MM-DD, time_format: false }
+      - { label: 标签, name: tags, widget: list, required: false }
+      - { label: 封面图, name: cover, widget: image, required: false }
+      - { label: 同日排序权重, name: order, widget: number, value_type: int, default: 0, required: false }
+      - label: 暂时隐藏文章
+        name: draft
+        widget: boolean
+        default: false
+        hint: 开启后即使合并到 main，文章也不会出现在发布的网站中。正常草稿请使用“保存草稿”。
+      - label: 正文
+        name: body
+        widget: markdown
+        hint: '公式与 ::: 定理/视频块请使用 Markdown 源码模式编辑；语法沿用现有网站。'
+
+  - name: settings
+    label: 网站设置
+    files:
+      - name: site
+        label: 基本信息与导航
+        file: content/site.json
+        fields:
+          - { label: 网站标题, name: title, widget: string }
+          - { label: 简称, name: shortTitle, widget: string }
+          - { label: 描述, name: description, widget: text }
+          - { label: 作者, name: author, widget: string }
+          - { label: 语言, name: lang, widget: hidden, default: zh-CN }
+          - { label: 网站地址, name: url, widget: string }
+          - label: 导航
+            name: nav
+            widget: list
+            fields:
+              - { label: 名称, name: label, widget: string }
+              - { label: 链接, name: href, widget: string }
+          - label: 页脚
+            name: footer
+            widget: object
+            fields:
+              - { label: 说明, name: note, widget: string }
+              - { label: 备案, name: icp, widget: string, required: false }

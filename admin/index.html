@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>文章管理 · oslemoncat</title>
+  <style>
+    body { margin: 0; font: 16px/1.8 system-ui, "Microsoft YaHei", sans-serif; background: #f7f8fa; color: #293449; }
+    #cms-loading { max-width: 640px; margin: 10vh auto; padding: 24px; }
+    a { color: #346fd0; }
+  </style>
+</head>
+<body>
+  <div id="cms-loading"><h1>文章管理</h1><p>正在加载编辑器……</p><p><a href="../">返回网站</a></p></div>
+  <noscript>文章编辑后台需要启用 JavaScript。</noscript>
+  <script>window.CMS_MANUAL_INIT = true;</script>
+  <script src="vendor/decap-cms.js"></script>
+  <script>
+    if (window.CMS) {
+      document.getElementById('cms-loading').remove();
+      window.CMS.init();
+    } else {
+      document.querySelector('#cms-loading p').textContent = '编辑器未能加载，请检查 admin/vendor/decap-cms.js 是否已上传。';
+    }
+  </script>
+</body>
+</html>
