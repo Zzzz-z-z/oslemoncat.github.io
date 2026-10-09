@@ -183,7 +183,7 @@ export async function renderArticle(container, slug, options = {}) {
         try{const result=await api('/api/articles/'+article.slug,{method:'DELETE'});controls.replaceChildren();status.textContent=result.message||'文章已删除，网站将在部署完成后更新。';status.append(' ',el('a',{href:'/articles/',text:'返回文章列表'}));}
         catch(e){status.textContent=e.message;remove.disabled=false;}
       });
-      controls.append(remove);header.append(controls,status);
+      controls.append(remove);const cover=header.querySelector('.article__cover');header.insertBefore(controls,cover);header.insertBefore(status,cover);
     };
     if(user.role==='admin')draw({canDelete:true,canEdit:true});
     else api('/api/articles/'+article.slug+'/permissions').then(draw).catch(()=>{});
