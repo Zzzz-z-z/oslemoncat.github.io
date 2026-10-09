@@ -1,4 +1,4 @@
-import {el,debounce} from '../assets/js/util.js';
+import {el,debounce} from '../assets/js/util.js?v=20261009-navigation-controls';
 import {api,logout} from '../assets/js/auth.js?v=20261009-delete-review';
 import {loadModules,loadArticles,loadArticleBody} from '../assets/js/content.js';
 import {renderMarkdown} from '../assets/js/markdown.js';
@@ -13,7 +13,7 @@ export async function renderWorkspace(container,params=new URLSearchParams()){
   const head=pageHead('写作区',admin?'欢迎回来。整理自己的文章，也看看大家的新投稿。':'把今天的发现写下来，提交后等待 Lemoncat 审核。');
   const tabs=el('nav',{class:'workspace-nav','aria-label':'写作区导航'});
   const navs=[['editor','写文章','/workspace/'],['submissions',admin?'全部投稿':'我的投稿','/workspace/submissions/'],['published',admin?'已发布文章':'我的文章','/workspace/published/'],...(admin?[['review','文章审核','/workspace/review/'],['assist','DeepSeek 助手','/workspace/assist/']]:[])];
-  for(const [key,label,href]of navs)tabs.append(el('a',{href,text:label,...(view===key?{'aria-current':'page'}:{})}));
+  for(const [key,label,href]of navs)tabs.append(el('a',{href,target:'_self',text:label,...(view===key?{'aria-current':'page'}:{})}));
   const signout=el('button',{class:'text-button',type:'button',text:'退出登录'});signout.addEventListener('click',logout);tabs.append(signout);
   const status=el('p',{class:'form-status',role:'status'}),stage=el('section',{class:'workspace-stage'});
   wrap.append(head,tabs,status,stage);container.replaceChildren(wrap);
@@ -29,8 +29,8 @@ export async function renderWorkspace(container,params=new URLSearchParams()){
     }
     if(view==='published'){
       let articles=await loadArticles();if(!admin){const result=await api('/api/ownership');const owned=new Set(result.owned);articles=articles.filter(a=>owned.has(a.slug));}stage.append(el('h2',{text:admin?'已发布文章':'我的文章'}));if(!articles.length)stage.append(el('p',{class:'empty',text:admin?'现在没有已发布文章。':'你还没有已发布的文章，审核通过后会显示在这里。'}));
-      for(const article of articles){const edit=el('a',{class:'text-button',href:'/workspace/?edit='+encodeURIComponent(article.slug),text:'编辑'}),remove=el('button',{class:'text-button danger',type:'button',text:'删除'});
-        const row=el('div',{class:'submission-row'},[el('div',{},[el('a',{href:`/article/${article.slug}/`,text:article.title}),el('p',{class:'muted',text:article.moduleTitle})]),el('div',{class:'row-actions'},[...(admin?[edit]:[]),remove])]);
+      for(const article of articles){const edit=el('a',{class:'btn btn--ghost article-action',href:'/workspace/?edit='+encodeURIComponent(article.slug),target:'_self',text:'编辑'}),remove=el('button',{class:'btn btn--ghost article-action danger',type:'button',text:'删除'});
+        const row=el('div',{class:'submission-row submission-row--published'},[el('div',{},[el('a',{href:`/article/${article.slug}/`,text:article.title}),el('p',{class:'muted',text:article.moduleTitle})]),el('div',{class:'row-actions'},[...(admin?[edit]:[]),remove])]);
         remove.addEventListener('click',async()=>{if(!confirm('确认删除“'+article.title+'”？删除后将从网站移除。'))return;remove.disabled=true;try{await api('/api/articles/'+article.slug,{method:'DELETE'});row.remove();status.textContent='文章已删除，网站将在部署完成后更新。';}catch(e){fail(e);remove.disabled=false;}});stage.append(row);}
       return;
     }

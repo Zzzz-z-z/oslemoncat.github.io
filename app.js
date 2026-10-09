@@ -1,9 +1,9 @@
 /* 应用入口：独立路径路由、统一登录、页头页脚和页面分发。
    构建为模块、文章、登录与写作区生成对应 HTML。旧 #/ 链接会跳到新路径。
    startApp 可注入测试依赖；boot 启用真实登录检查。 */
-import { detectBase, el } from './assets/js/util.js';
+import { detectBase, el } from './assets/js/util.js?v=20261009-navigation-controls';
 import { loadSite, loadArticles } from './assets/js/content.js';
-import { renderHeader, renderFooter } from './assets/js/layout.js';
+import { renderHeader, renderFooter } from './assets/js/layout.js?v=20261009-navigation-controls';
 import { initTheme } from './assets/js/theme.js';
 import {restoreSession} from './assets/js/auth.js?v=20261009-delete-review';
 import {renderLogin,safeNext} from './js/login.js';
@@ -21,7 +21,7 @@ const ROUTES = [
 ];
 
 const LOADERS = {
-  workspace:()=>import('./js/workspace.js?v=20261009-delete-review').then(m=>m.renderWorkspace),
+  workspace:()=>import('./js/workspace.js?v=20261009-navigation-controls').then(m=>m.renderWorkspace),
   login:()=>Promise.resolve(renderLogin),
   home: () => import('./js/home.js').then((mod) => mod.renderHome),
   modules: () => import('./js/modules.js').then((mod) => mod.renderModules),

@@ -1,5 +1,5 @@
 /* 布局与共享组件：页头、页脚、卡片、列表、分页、面包屑。 */
-import { el, formatDate, latestDate, resolveUrl, escapeHtml } from './util.js';
+import { el, formatDate, latestDate, resolveUrl, escapeHtml } from './util.js?v=20261009-navigation-controls';
 import { icon } from './theme.js';
 
 /* ------------------------------------------------------------------ 页头 */
@@ -9,6 +9,7 @@ export function renderHeader(site, activeSection = '', user = null) {
     const isActive = key === activeSection;
     return el('a', {
       href: item.href,
+      target: '_self',
       text: item.label,
       ...(isActive ? { 'aria-current': 'page' } : {}),
     });
@@ -28,7 +29,7 @@ export function renderHeader(site, activeSection = '', user = null) {
 
   const header = el('header', { class: 'site-header' }, [
     el('div', { class: 'wrap site-header__inner' }, [
-      el('a', { class: 'brand', href: '#/' }, [
+      el('a', { class: 'brand', href: '#/', target: '_self' }, [
         el('img',{class:'brand__mark',src:'/assets/images/favicon.svg?v=4',alt:'',width:48,height:48}),
         el('span', { text: site.shortTitle || site.title }),
       ]),

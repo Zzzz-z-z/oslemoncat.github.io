@@ -25,7 +25,7 @@
     :host([data-dragging]) .sprite{animation:none;transform:rotate(-5deg)}
     :host([data-paused]) .sprite,:host([data-paused]) .motion{animation-play-state:paused}
     .more,.launcher{position:absolute;bottom:0;right:0;border:1px solid #dce4cc;background:#fffffff2;pointer-events:auto;box-shadow:0 3px 14px #29463212;display:grid;place-items:center}
-    .more{width:30px;height:30px;border-radius:50%;font-size:19px;line-height:1}.launcher{width:48px;height:48px;border-radius:50%;font-size:24px}
+    .more{width:30px;height:30px;border-radius:50%;font-size:19px;line-height:1}.launcher{width:48px;height:48px;border-radius:50%;font-size:24px;touch-action:none;cursor:grab}.launcher:active{cursor:grabbing}
     .bubble{position:absolute;bottom:calc(100% + 8px);left:var(--lc-bubble-left,0px);width:max-content;max-width:var(--lc-bubble-width,224px);padding:10px 14px;background:#fff;border:1px solid #ecebd8;border-radius:18px;box-shadow:0 4px 14px #625d1110;pointer-events:none;animation:appear .2s ease-out;overflow-wrap:anywhere}
     .panel{position:absolute;left:var(--lc-panel-left,0px);top:var(--lc-panel-top,-140px);width:var(--lc-panel-width,220px);padding:8px;border-radius:16px;background:#fffef9;border:1px solid #e3e7d7;box-shadow:0 8px 28px #203a2220;pointer-events:auto;display:grid;grid-template-columns:1fr 1fr;gap:6px}
     .panel button{border:0;border-radius:10px;background:#f0f4e9;padding:8px 4px;white-space:nowrap;min-height:36px;font-size:13px}.panel button:hover{background:#e5edda}.panel .hide{grid-column:1/-1;background:transparent;color:#68755e}
@@ -52,7 +52,7 @@
       this._connected = true;
       this._abort = new AbortController();
       const signal = this._abort.signal;
-      this.shadowRoot.innerHTML = `<style>${styles}</style><div class="bubble" role="status" aria-live="polite" hidden></div><button class="pet" aria-label="摸摸柠檬猫，按住可拖动"><div class="motion"><div class="sprite"></div><div class="sprite ghost" aria-hidden="true" hidden></div></div></button><button class="more" aria-label="打开柠檬猫菜单" aria-expanded="false">···</button><div class="panel" role="group" aria-label="柠檬猫互动" hidden><button data-action="happy">♡ 摸摸头</button><button data-action="feed">🍋 喂柠檬</button><button data-action="play">↗ 伸懒腰</button><button data-action="sleep">☾ 打个盹</button><button class="hide" data-action="hide">收起来</button></div><button class="launcher" aria-label="唤醒柠檬猫" hidden>🐾</button><div class="error" hidden>柠檬猫图片加载失败，请检查素材路径。</div>`;
+      this.shadowRoot.innerHTML = `<style>${styles}</style><div class="bubble" role="status" aria-live="polite" hidden></div><button class="pet" aria-label="摸摸柠檬猫，按住可拖动"><div class="motion"><div class="sprite"></div><div class="sprite ghost" aria-hidden="true" hidden></div></div></button><button class="more" aria-label="打开柠檬猫菜单" aria-expanded="false">···</button><div class="panel" role="group" aria-label="柠檬猫互动" hidden><button data-action="happy">♡ 摸摸头</button><button data-action="feed">🍋 喂柠檬</button><button data-action="play">↗ 伸懒腰</button><button data-action="sleep">☾ 打个盹</button><button class="hide" data-action="hide">收起来</button></div><button class="launcher" aria-label="唤醒柠檬猫，按住可拖动" hidden>🐾</button><div class="error" hidden>柠檬猫图片加载失败，请检查素材路径。</div>`;
       const query = s => this.shadowRoot.querySelector(s);
       this._pet = query('.pet'); this._sprite = query('.sprite'); this._ghost = query('.ghost'); this._bubble = query('.bubble');
       this._panel = query('.panel'); this._more = query('.more'); this._launcher = query('.launcher');
@@ -66,13 +66,15 @@
       this.resetPosition(false);
       this._restore();
       this._renderPose();
-      this._pet.addEventListener('pointerdown', e => this._pointerDown(e), { signal });
-      this._pet.addEventListener('pointermove', e => this._pointerMove(e), { signal });
-      this._pet.addEventListener('pointerup', e => this._pointerUp(e), { signal });
-      this._pet.addEventListener('pointercancel', () => this._endDrag(), { signal });
+      for (const handle of [this._pet, this._launcher]) {
+        handle.addEventListener('pointerdown', e => this._pointerDown(e), { signal });
+        handle.addEventListener('pointermove', e => this._pointerMove(e), { signal });
+        handle.addEventListener('pointerup', e => this._pointerUp(e), { signal });
+        handle.addEventListener('pointercancel', () => { this._endDrag(); this._save(); }, { signal });
+      }
       this._pet.addEventListener('click', e => { if (e.detail === 0) this.act('happy'); }, { signal });
       this._more.addEventListener('click', () => this._togglePanel(), { signal });
-      this._launcher.addEventListener('click', () => this.show(), { signal });
+      this._launcher.addEventListener('click', e => { if (e.detail === 0) this.show(); }, { signal });
       this._panel.addEventListener('click', e => {
         const action = e.target.closest('[data-action]')?.dataset.action;
         if (!action) return;
@@ -83,7 +85,7 @@
       this.addEventListener('keydown', e => {
         if (e.key === 'Escape') { this._togglePanel(false); this._more.focus(); }
         const step = { ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16] }[e.key];
-        if (step && e.composedPath()[0] === this._pet) { e.preventDefault(); this._place(this.x + step[0], this.y + step[1]); this._save(); this._emit('move'); }
+        if (step && [this._pet, this._launcher].includes(e.composedPath()[0])) { e.preventDefault(); this._place(this.x + step[0], this.y + step[1]); this._save(); this._emit('move'); }
       }, { signal });
       window.addEventListener('resize', () => this._resize(), { signal });
       document.addEventListener('visibilitychange', () => {
@@ -108,7 +110,8 @@
     _bounds() { return this.options.container ? { width: this.options.container.clientWidth, height: this.options.container.clientHeight } : { width: window.innerWidth, height: window.innerHeight }; }
     _place(x, y) {
       const { width, height } = this._bounds();
-      this.x = Math.max(0, Math.min(x, width - this.size)); this.y = Math.max(0, Math.min(y, height - this.size));
+      const hiddenInset = this._hidden ? this.size - 48 : 0;
+      this.x = Math.max(-hiddenInset, Math.min(x, width - this.size)); this.y = Math.max(-hiddenInset, Math.min(y, height - this.size));
       this.style.left = this.x + 'px'; this.style.top = this.y + 'px';
       const bubbleWidth = Math.min(224, width - 16);
       const panelWidth = Math.min(220, width - 16);
@@ -134,22 +137,23 @@
     _pointerDown(e) {
       if (e.button !== 0 || this._drag) return;
       this._cancel(this._stateTimer); this._cancel(this._idleTimer); this._togglePanel(false);
-      this._drag = { id: e.pointerId, startX: e.clientX, startY: e.clientY, x: this.x, y: this.y, moved: false };
-      this._pet.setPointerCapture(e.pointerId);
+      this._drag = { id: e.pointerId, startX: e.clientX, startY: e.clientY, x: this.x, y: this.y, moved: false, handle: e.currentTarget, collapsed: e.currentTarget === this._launcher };
+      this._drag.handle.setPointerCapture(e.pointerId);
     }
     _pointerMove(e) {
       if (!this._drag || e.pointerId !== this._drag.id) return;
       const dx = e.clientX - this._drag.startX, dy = e.clientY - this._drag.startY;
-      if (Math.hypot(dx, dy) > 5 && !this._drag.moved) { this._drag.moved = true; this.setAttribute('data-dragging', ''); this.state = 'curious'; this._renderPose(); this._bubble.hidden = true; }
+      if (Math.hypot(dx, dy) > 5 && !this._drag.moved) { this._drag.moved = true; this.setAttribute('data-dragging', ''); if (!this._drag.collapsed) { this.state = 'curious'; this._renderPose(); } this._bubble.hidden = true; }
       if (this._drag.moved) this._place(this._drag.x + dx, this._drag.y + dy);
     }
     _pointerUp(e) {
       if (!this._drag || e.pointerId !== this._drag.id) return;
-      const moved = this._drag.moved; this._endDrag(!moved);
+      const { moved, collapsed } = this._drag; this._endDrag(!moved);
+      if (collapsed) { if (moved) { this._save(); this._emit('move'); } else this.show(); return; }
       if (moved) { this._save(); this.act('curious'); this._emit('move'); } else this.act('happy');
     }
     _endDrag(resetPose = true) {
-      if (this._drag && this._pet.hasPointerCapture(this._drag.id)) this._pet.releasePointerCapture(this._drag.id);
+      if (this._drag && this._drag.handle.hasPointerCapture(this._drag.id)) this._drag.handle.releasePointerCapture(this._drag.id);
       this._drag = null; this.removeAttribute('data-dragging'); this._scheduleIdle();
       if (resetPose && this.state === 'curious') { this.state = 'idle'; this._renderPose(); }
     }
@@ -199,18 +203,18 @@
     }
     setAuto(value) { this.options.auto = Boolean(value); this._scheduleIdle(); return this; }
     hide() { this._finishPoseTransition(); this._hidden = true; this._pet.hidden = this._more.hidden = this._bubble.hidden = true; this._launcher.hidden = false; this._togglePanel(false); this._cancel(this._stateTimer); this._scheduleIdle(); this._save(); this._emit('hide'); return this; }
-    show() { this._hidden = false; this._pet.hidden = this._more.hidden = false; this._launcher.hidden = true; this.state = 'idle'; this._renderPose(); this.say('回来啦！继续陪你。'); this._scheduleIdle(); this._save(); this._emit('show'); return this; }
+    show() { this._hidden = false; this._place(this.x, this.y); this._pet.hidden = this._more.hidden = false; this._launcher.hidden = true; this.state = 'idle'; this._renderPose(); this.say('回来啦！继续陪你。'); this._scheduleIdle(); this._save(); this._emit('show'); return this; }
     destroy() { this.remove(); }
     _emit(type) { this.dispatchEvent(new CustomEvent('lemoncat:' + type, { detail: { state: this.state, x: this.x, y: this.y, size: this.size }, bubbles: true, composed: true })); }
     _save() { if (!this.options.persist || !this._connected) return; try { localStorage.setItem(this.options.storageKey, JSON.stringify({ x: this.x, y: this.y, size: this.options.size, hidden: !!this._hidden })); } catch {} }
     _restore() {
       if (!this.options.persist) return;
-      try { const saved = JSON.parse(localStorage.getItem(this.options.storageKey)); if (!saved) return; if (Number.isFinite(saved.size)) this.setSize(saved.size, false); if (Number.isFinite(saved.x) && Number.isFinite(saved.y)) this._place(saved.x, saved.y); if (saved.hidden) this.hide(); } catch {}
+      try { const saved = JSON.parse(localStorage.getItem(this.options.storageKey)); if (!saved) return; if (Number.isFinite(saved.size)) this.setSize(saved.size, false); if (saved.hidden) this._hidden = true; if (Number.isFinite(saved.x) && Number.isFinite(saved.y)) this._place(saved.x, saved.y); if (saved.hidden) this.hide(); } catch {}
     }
   }
   customElements.define('lemon-cat-pet', LemonCatPet);
   window.LemonCat = {
-    version: '1.1.2',
+    version: '1.1.3',
     mount(options = {}) {
       const pet = document.createElement('lemon-cat-pet');
       const container = typeof options.container === 'string' ? document.querySelector(options.container) : options.container;

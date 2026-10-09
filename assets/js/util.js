@@ -39,7 +39,7 @@ export function el(tag, attrs = {}, children = []) {
     node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
   }
   if(tag==='a' && node.getAttribute('href')?.startsWith('#/')){const [route,query]=node.getAttribute('href').slice(1).split('?');node.setAttribute('href',route.replace(/\/$/,'')+'/' +(query?'?'+query:''));}
-  if(tag==='a' && /^\/(?:$|modules\/|module\/|articles\/|article\/|about\/|workspace\/|login\/)/.test(node.getAttribute('href')||'')){node.setAttribute('target','_blank');node.setAttribute('rel','noopener noreferrer');}
+  if(tag==='a' && !node.hasAttribute('target') && /^\/(?:$|modules\/|module\/|articles\/|article\/|about\/|workspace\/|login\/)/.test(node.getAttribute('href')||'')){node.setAttribute('target','_blank');node.setAttribute('rel','noopener noreferrer');}
   return node;
 }
 
