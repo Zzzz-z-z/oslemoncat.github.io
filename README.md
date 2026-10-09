@@ -1,4 +1,4 @@
-# oslemoncat.github.io
+# Lemoncat的喵喵屋
 
 > 本地接入版已增加 `/admin/` 文章后台、Cloudflare GitHub 登录与自动发布。
 > 请先阅读 [CMS_SETUP.md](CMS_SETUP.md)。后台编辑源是 `content/posts/`；

@@ -2,8 +2,8 @@
 import { fetchJson, fetchText, normalizeDate, latestDate, byDateDesc, truncate, detectBase } from './util.js';
 
 const SITE_DEFAULT = {
-  title: 'oslemoncat 的知识库',
-  shortTitle: 'oslemoncat',
+  title: 'Lemoncat的喵喵屋',
+  shortTitle: 'Lemoncat的喵喵屋',
   description: '学习笔记与知识整理。',
   author: 'oslemoncat',
   lang: 'zh-CN',

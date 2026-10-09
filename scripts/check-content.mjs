@@ -43,7 +43,7 @@ for (const page of ['home', 'modules', 'module', 'articles', 'article', 'about']
 }
 
 console.log('\n[内容数据]');
-const siteJson = await fetchCheck('content/site.json', 'content/site.json', { expectText: '知识库' });
+const siteJson = await fetchCheck('content/site.json', 'content/site.json', { expectText: JSON.parse(readFileSync(join(ROOT, 'content', 'site.json'), 'utf8')).title });
 await fetchCheck('content/modules.json', 'content/modules.json', { expectText: '数学分析' });
 const indexRaw = await fetchCheck('content/articles.json', 'content/articles.json', { expectText: 'articles' });
 

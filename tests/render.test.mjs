@@ -70,7 +70,7 @@ const text = () => content().textContent.replace(/\s+/g, ' ');
 let route = await startApp({ document, window: win });
 check('首页渲染有内容', content().innerHTML.length > 500, `${content().innerHTML.length} 字符`);
 check('首页未报错', !/渲染出错|加载失败|页面不存在/.test(text()), text().slice(0, 120));
-check('首页出现站点标题', text().includes('知识库'), text().slice(0, 80));
+check('首页出现站点标题', text().includes(JSON.parse(readFileSync(join(ROOT, 'content', 'site.json'), 'utf8')).title), text().slice(0, 80));
 check('首页出现知识模块区块', text().includes('知识模块'));
 check('首页出现最近更新', text().includes('最近更新'));
 check('首页模块卡片可点击', content().querySelectorAll('a[href^="#/module/"]').length >= 4,
