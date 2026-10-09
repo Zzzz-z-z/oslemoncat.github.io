@@ -4,6 +4,7 @@ import { loadSite, loadArticles, loadArticleBody, findArticle } from '../assets/
 import { renderMarkdown, typesetMath, buildToc } from '../assets/js/markdown.js';
 import { breadcrumbs, tagList, pager, emptyState } from '../assets/js/layout.js';
 import { initAnchorScroll, initTocHighlight } from '../assets/js/toc.js';
+import {api} from '../assets/js/auth.js?v=20261009-delete-review';
 
 const KATEX_CSS = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
 const KATEX_JS = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js';
@@ -169,6 +170,24 @@ export async function renderArticle(container, slug, options = {}) {
       : null,
   ]);
 
+  const user=window.__LEMONCAT_USER__;
+  if(user){
+    const controls=el('div',{class:'article-controls'}),status=el('p',{class:'form-status',role:'status'});
+    const draw=permissions=>{
+      if(!permissions.canDelete)return;
+      if(permissions.canEdit)controls.append(el('a',{class:'btn btn--ghost',href:'/workspace/?edit='+encodeURIComponent(article.slug),text:'编辑文章'}));
+      const remove=el('button',{class:'btn btn--ghost danger',type:'button',text:'删除文章'});
+      remove.addEventListener('click',async()=>{
+        if(!confirm('确认删除“'+article.title+'”？删除后将从网站移除。'))return;
+        remove.disabled=true;
+        try{const result=await api('/api/articles/'+article.slug,{method:'DELETE'});controls.replaceChildren();status.textContent=result.message||'文章已删除，网站将在部署完成后更新。';status.append(' ',el('a',{href:'/articles/',text:'返回文章列表'}));}
+        catch(e){status.textContent=e.message;remove.disabled=false;}
+      });
+      controls.append(remove);header.append(controls,status);
+    };
+    if(user.role==='admin')draw({canDelete:true,canEdit:true});
+    else api('/api/articles/'+article.slug+'/permissions').then(draw).catch(()=>{});
+  }
   const prose = el('div', { class: 'prose', html: rendered.html });
 
   const footer = el('footer', { class: 'article__footer' }, [

@@ -5,7 +5,7 @@ import { detectBase, el } from './assets/js/util.js';
 import { loadSite, loadArticles } from './assets/js/content.js';
 import { renderHeader, renderFooter } from './assets/js/layout.js';
 import { initTheme } from './assets/js/theme.js';
-import {restoreSession} from './assets/js/auth.js';
+import {restoreSession} from './assets/js/auth.js?v=20261009-delete-review';
 import {renderLogin,safeNext} from './js/login.js';
 import { initAnchorScroll } from './assets/js/toc.js';
 
@@ -21,13 +21,13 @@ const ROUTES = [
 ];
 
 const LOADERS = {
-  workspace:()=>import('./js/workspace.js').then(m=>m.renderWorkspace),
+  workspace:()=>import('./js/workspace.js?v=20261009-delete-review').then(m=>m.renderWorkspace),
   login:()=>Promise.resolve(renderLogin),
   home: () => import('./js/home.js').then((mod) => mod.renderHome),
   modules: () => import('./js/modules.js').then((mod) => mod.renderModules),
   module: () => import('./js/module.js').then((mod) => mod.renderModule),
   articles: () => import('./js/articles.js').then((mod) => mod.renderArticles),
-  article: () => import('./js/article.js').then((mod) => mod.renderArticle),
+  article: () => import('./js/article.js?v=20261009-delete-review').then((mod) => mod.renderArticle),
   about: () => import('./js/about.js').then((mod) => mod.renderAbout),
 };
 

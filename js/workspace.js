@@ -1,5 +1,5 @@
 import {el,debounce} from '../assets/js/util.js';
-import {api,logout} from '../assets/js/auth.js';
+import {api,logout} from '../assets/js/auth.js?v=20261009-delete-review';
 import {loadModules,loadArticles,loadArticleBody} from '../assets/js/content.js';
 import {renderMarkdown} from '../assets/js/markdown.js';
 import {pageHead} from '../assets/js/layout.js';
@@ -12,14 +12,15 @@ export async function renderWorkspace(container,params=new URLSearchParams()){
   const wrap=el('div',{class:'wrap workspace'});
   const head=pageHead('写作区',admin?'欢迎回来。整理自己的文章，也看看大家的新投稿。':'把今天的发现写下来，提交后等待 Lemoncat 审核。');
   const tabs=el('nav',{class:'workspace-nav','aria-label':'写作区导航'});
-  const navs=[['editor','写文章','/workspace/'],['submissions',admin?'全部投稿':'我的投稿','/workspace/submissions/'],...(admin?[['review','文章审核','/workspace/review/'],['published','已发布文章','/workspace/published/'],['assist','DeepSeek 助手','/workspace/assist/']]:[])];
+  const navs=[['editor','写文章','/workspace/'],['submissions',admin?'全部投稿':'我的投稿','/workspace/submissions/'],['published',admin?'已发布文章':'我的文章','/workspace/published/'],...(admin?[['review','文章审核','/workspace/review/'],['assist','DeepSeek 助手','/workspace/assist/']]:[])];
   for(const [key,label,href]of navs)tabs.append(el('a',{href,text:label,...(view===key?{'aria-current':'page'}:{})}));
   const signout=el('button',{class:'text-button',type:'button',text:'退出登录'});signout.addEventListener('click',logout);tabs.append(signout);
   const status=el('p',{class:'form-status',role:'status'}),stage=el('section',{class:'workspace-stage'});
   wrap.append(head,tabs,status,stage);container.replaceChildren(wrap);
-  const fail=e=>{status.textContent=e.message;};
+  const safeCheckUrl=value=>typeof value==='string'&&/^https:\/\/github\.com\/oslemoncat\/oslemoncat\.github\.io\/(actions\/runs\/\d+|pull\/\d+\/checks)$/.test(value)?value:null;
+  const fail=e=>{status.textContent=e.message;const url=safeCheckUrl(e.check?.url);if(url)status.append(' ',el('a',{href:url,target:'_blank',rel:'noopener noreferrer',text:'打开检查详情'}));};
   try{
-    if(['review','published','assist'].includes(view)&&!admin){stage.append(el('p',{text:'这个页面仅管理员可以使用。'}));return;}
+    if(['review','assist'].includes(view)&&!admin){stage.append(el('p',{text:'这个页面仅管理员可以使用。'}));return;}
     if(view==='assist'){
       stage.append(el('h2',{text:'一起把喵喵屋做得更好'}),el('p',{class:'muted',text:'描述想改进的界面或文章，DeepSeek 会给出建议。'}));
       const input=el('textarea',{class:'field-input ai-prompt',rows:7,maxlength:6000,'aria-label':'给 DeepSeek 的需求',placeholder:'例如：帮我改善知识模块页在手机上的排版…'});
@@ -27,9 +28,9 @@ export async function renderWorkspace(container,params=new URLSearchParams()){
       button.addEventListener('click',async()=>{button.disabled=true;status.textContent='正在生成建议…';try{const result=await api('/api/assist',{method:'POST',body:{prompt:input.value}});output.textContent=result.text;output.hidden=false;status.textContent='建议已生成，可以按需要采用。';}catch(e){fail(e);}finally{button.disabled=false;}});stage.append(input,button,output);return;
     }
     if(view==='published'){
-      const articles=await loadArticles();stage.append(el('h2',{text:'已发布文章'}));
+      let articles=await loadArticles();if(!admin){const result=await api('/api/ownership');const owned=new Set(result.owned);articles=articles.filter(a=>owned.has(a.slug));}stage.append(el('h2',{text:admin?'已发布文章':'我的文章'}));if(!articles.length)stage.append(el('p',{class:'empty',text:admin?'现在没有已发布文章。':'你还没有已发布的文章，审核通过后会显示在这里。'}));
       for(const article of articles){const edit=el('a',{class:'text-button',href:'/workspace/?edit='+encodeURIComponent(article.slug),text:'编辑'}),remove=el('button',{class:'text-button danger',type:'button',text:'删除'});
-        const row=el('div',{class:'submission-row'},[el('div',{},[el('a',{href:`/article/${article.slug}/`,text:article.title}),el('p',{class:'muted',text:article.moduleTitle})]),el('div',{class:'row-actions'},[edit,remove])]);
+        const row=el('div',{class:'submission-row'},[el('div',{},[el('a',{href:`/article/${article.slug}/`,text:article.title}),el('p',{class:'muted',text:article.moduleTitle})]),el('div',{class:'row-actions'},[...(admin?[edit]:[]),remove])]);
         remove.addEventListener('click',async()=>{if(!confirm('确认删除“'+article.title+'”？删除后将从网站移除。'))return;remove.disabled=true;try{await api('/api/articles/'+article.slug,{method:'DELETE'});row.remove();status.textContent='文章已删除，网站将在部署完成后更新。';}catch(e){fail(e);remove.disabled=false;}});stage.append(row);}
       return;
     }
@@ -47,10 +48,16 @@ export async function renderWorkspace(container,params=new URLSearchParams()){
         if(post.attachments?.length)stage.append(el('ul',{class:'review-files'},post.attachments.map(file=>el('li',{},[el('a',{href:mediaUrl(file.file),text:file.title||file.file.split('/').pop(),target:'_blank',rel:'noopener noreferrer'})]))));
         if(detail.files?.length)stage.append(el('details',{class:'review-details'},[el('summary',{text:'查看本次修改的文件（'+detail.files.length+'）'}),el('ul',{class:'review-files'},detail.files.map(file=>el('li',{text:file.path})))]));
         if(admin&&detail.state==='open'){
+          const checkBox=el('div',{class:'review-check',role:'status'}),refresh=el('button',{class:'text-button',type:'button',text:'刷新检查状态'});
+          const drawCheck=()=>{checkBox.replaceChildren(el('p',{text:detail.check?.message||'请刷新检查状态。'}));const url=safeCheckUrl(detail.check?.url);if(url)checkBox.append(el('a',{href:url,target:'_blank',rel:'noopener noreferrer',text:detail.check.status==='approval_required'?'去 GitHub 批准运行检查':'打开检查详情'}));checkBox.append(refresh);};
+          stage.append(checkBox);
           const publish=el('button',{class:'btn btn--primary',type:'button',text:'审核通过并发布'}),reject=el('button',{class:'btn btn--ghost danger',type:'button',text:'退回投稿'});
-          for(const [button,action]of [[publish,'publish'],[reject,'reject']])button.addEventListener('click',async()=>{if(action==='reject'&&!confirm('确认退回这篇投稿？'))return;publish.disabled=reject.disabled=true;try{await api('/api/submissions/'+id+'/review',{method:'POST',body:{action,sha:detail.sha}});status.textContent=action==='publish'?'审核通过，文章将在网站部署完成后显示。':'投稿已退回。';}catch(e){fail(e);publish.disabled=reject.disabled=false;}});
+          const updateCheck=()=>{drawCheck();publish.disabled=Boolean(detail.check&&detail.check.status!=='success');};
+          refresh.addEventListener('click',async()=>{refresh.disabled=true;try{const fresh=await api('/api/submissions/'+id);if(fresh.sha!==detail.sha||fresh.state!==detail.state){await renderWorkspace(container,params);return;}detail.check=fresh.check;updateCheck();}catch(e){fail(e);}finally{refresh.disabled=false;}});updateCheck();
+          for(const [button,action]of [[publish,'publish'],[reject,'reject']])button.addEventListener('click',async()=>{if(action==='reject'&&!confirm('确认退回这篇投稿？'))return;publish.disabled=reject.disabled=true;try{const result=await api('/api/submissions/'+id+'/review',{method:'POST',body:{action,sha:detail.sha}});status.textContent=result.message||(action==='publish'?'审核通过，文章将在网站部署完成后显示。':'投稿已退回。');}catch(e){fail(e);if(e.check)detail.check=e.check;updateCheck();reject.disabled=false;}});
           stage.append(el('div',{class:'editor-actions'},[publish,reject]));
         }else if(detail.state==='open'&&detail.author.toLowerCase()===user.login.toLowerCase())stage.append(el('a',{class:'btn btn--primary',href:'/workspace/?submission='+id,text:'继续编辑'}));
+        if(detail.state==='open'&&(admin||detail.canDelete||detail.author.toLowerCase()===user.login.toLowerCase())){const withdraw=el('button',{class:'text-button danger',type:'button',text:'撤回投稿'});withdraw.addEventListener('click',async()=>{if(!confirm('确认撤回这篇待审投稿？'))return;withdraw.disabled=true;try{await api('/api/submissions/'+id,{method:'DELETE'});stage.replaceChildren(el('p',{text:'投稿已撤回，不会发布到网站。'}));}catch(e){fail(e);withdraw.disabled=false;}});stage.append(withdraw);}
         return;
       }
       stage.append(el('h2',{text:view==='review'?'等待你审核的文章':admin?'全部投稿':'我的投稿'}));

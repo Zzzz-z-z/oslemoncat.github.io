@@ -206,7 +206,7 @@ async function handlePortal(request, env, fetcher) {
     if (!/^[\w.-]+\/[\w.-]+$/.test(env.REPOSITORY || '')) throw new PortalError(503,'网站服务尚未配置。');
     const identity = await portalIdentity(request,env,fetcher), {gh,user,role,repo} = identity;
     const url = new URL(request.url), resource = url.pathname;
-    if (resource === '/api/session' && request.method === 'GET') return portalJson({login:user.login,avatar:user.avatar_url,role,ai:role==='admin' && Boolean(env.DEEPSEEK_API_KEY)},200,origin);
+    if (resource === '/api/session' && request.method === 'GET') return portalJson({login:user.login,id:actorId(identity),avatar:user.avatar_url,role,ai:role==='admin' && Boolean(env.DEEPSEEK_API_KEY)},200,origin);
     if (resource === '/api/submissions' && request.method === 'GET') {
       const page = Math.max(1, Math.min(100, Number(url.searchParams.get('page')) || 1));
       const prs = await gh(`/repos/${env.REPOSITORY}/pulls?state=all&base=main&sort=updated&per_page=100&page=${page}`);
@@ -231,7 +231,7 @@ async function handlePortal(request, env, fetcher) {
     if (submissionMatch && request.method==='GET') {
       const pr = await getPortalSubmission(identity,env,submissionMatch[1]);
       const content = await inspectPortalSubmission(identity,env,pr);
-      return portalJson({number:pr.number,title:pr.title.slice(5),author:pr.user.login,sha:pr.head.sha,state:pr.state,source:content.source,mediaBase:`https://raw.githubusercontent.com/${pr.head.repo.full_name}/${pr.head.sha}/`,files:content.files.map(f=>({path:f.filename,status:f.status}))},200,origin);
+      return portalJson({number:pr.number,title:pr.title.slice(5),author:pr.user.login,sha:pr.head.sha,state:pr.state,canDelete:role==='admin'||pr.user.login.toLowerCase()===user.login.toLowerCase(),check:role==='admin'&&pr.state==='open'?await submissionCheck(identity,env,pr):null,source:content.source,mediaBase:`https://raw.githubusercontent.com/${pr.head.repo.full_name}/${pr.head.sha}/`,files:content.files.map(f=>({path:f.filename,status:f.status}))},200,origin);
     }
     if (submissionMatch && request.method==='PATCH') {
       const pr = await getPortalSubmission(identity,env,submissionMatch[1]);
@@ -251,26 +251,53 @@ async function handlePortal(request, env, fetcher) {
       if(pr.state!=='open' || input.sha!==pr.head.sha) throw new PortalError(409,'稿件已变化或已处理，请重新打开。');
       if(input.action==='reject') { await gh(`/repos/${env.REPOSITORY}/pulls/${pr.number}`,'PATCH',{state:'closed'}); return portalJson({state:'closed'},200,origin); }
       if(input.action!=='publish') throw new PortalError(400,'审核操作无效。');
-      await inspectPortalSubmission(identity,env,pr);
-      const checks=await gh(`/repos/${env.REPOSITORY}/commits/${pr.head.sha}/check-runs`);
-      if(!checks.check_runs?.some(c=>c.name==='build' && c.conclusion==='success' && c.app?.slug==='github-actions')) throw new PortalError(409,'自动检查尚未通过，请稍后刷新再发布。');
+      const inspected=await inspectPortalSubmission(identity,env,pr);
+      const owner=await checkSubmissionOwner(identity,env,pr,inspected);
+      const check=await submissionCheck(identity,env,pr);
+      if(check.status!=='success'){const error=new PortalError(409,check.message);error.check=check;throw error;}
       const merged=await gh(`/repos/${env.REPOSITORY}/pulls/${pr.number}/merge`,'PUT',{sha:pr.head.sha,merge_method:'squash',commit_title:'Publish article: '+pr.title.slice(5)});
       if(!merged.merged) throw new PortalError(409,'文章暂时不能发布，请检查合并冲突。');
+      try{await writeOwner(identity,env,owner.slug,owner,fetcher);}catch{ return portalJson({state:'published',message:'文章已发布；作者权限记录暂未完成，可由管理员删除。'},200,origin); }
       return portalJson({state:'published'},200,origin);
+    }
+    if(resource==='/api/ownership'&&request.method==='GET'){
+      const owners=await readOwners(gh,env),id=actorId(identity);
+      return portalJson({owned:Object.entries(owners).filter(([,p])=>id&&p.id===id).map(([slug])=>slug)},200,origin);
+    }
+    const permission=resource.match(/^\/api\/articles\/([a-z0-9]+(?:-[a-z0-9]+)*)\/permissions$/);
+    if(permission&&request.method==='GET'){
+      if(role==='admin')return portalJson({canDelete:true,canEdit:true},200,origin);
+      const owners=await readOwners(gh,env),id=actorId(identity);
+      return portalJson({canDelete:Boolean(id&&ownerOf(owners,permission[1])?.id===id),canEdit:false},200,origin);
+    }
+    if(submissionMatch&&request.method==='DELETE'){
+      const pr=await getPortalSubmission(identity,env,submissionMatch[1]);
+      if(pr.merged_at)throw new PortalError(409,'文章已发布，请到已发布文章中删除。');
+      await gh(`/repos/${env.REPOSITORY}/pulls/${pr.number}`,'PATCH',{state:'closed'});
+      return portalJson({deleted:true},200,origin);
     }
     if(resource==='/api/articles' && request.method==='POST') {
       needAdmin(identity);
       const {documents,post}=await submissionDocuments(await readPortalBody(request),identity,env);
+      const owners=await readOwners(gh,env);let existed=false;
+      try{await gh('/repos/'+env.REPOSITORY+'/contents/content/posts/'+post.slug+'.md?ref=main');existed=true;}catch(e){if(e.status!==404)throw e;}
+      const previous=existed?ownerOf(owners,post.slug):null;
+      const owner=previous||{id:actorId(identity),login:user.login};
+      if(owner.id)documents.at(-1).content=documents.at(-1).content.replace('\n---\n','\nauthor_id: '+JSON.stringify(owner.id)+'\n---\n');
       const source=await gh(`/repos/${env.REPOSITORY}/git/ref/heads/main`);
       const sha=await commitPortalFiles(gh,env.REPOSITORY,source.object.sha,documents,'Publish article: '+post.title);
       await gh(`/repos/${env.REPOSITORY}/git/refs/heads/main`,'PATCH',{sha,force:false});
+      try{await writeOwner(identity,env,post.slug,owner,fetcher);}catch{return portalJson({slug:post.slug,sha,message:'文章已发布；作者权限记录暂未完成，可由管理员删除。'},201,origin);}
       return portalJson({slug:post.slug,sha},201,origin);
     }
     const deleteMatch=resource.match(/^\/api\/articles\/([a-z0-9]+(?:-[a-z0-9]+)*)$/);
     if(deleteMatch && request.method==='DELETE') {
-      needAdmin(identity);
-      const file=await gh(`/repos/${env.REPOSITORY}/contents/content/posts/${deleteMatch[1]}.md?ref=main`);
-      await gh(`/repos/${env.REPOSITORY}/contents/content/posts/${deleteMatch[1]}.md`,'DELETE',{message:'Delete article: '+deleteMatch[1],sha:file.sha,branch:'main'});
+      const slug=deleteMatch[1],id=actorId(identity),owners=role==='admin'?null:await readOwners(gh,env);
+      if(role!=='admin'&&(!id||ownerOf(owners,slug)?.id!==id))throw new PortalError(403,'只能删除自己写的文章。');
+      const file=await gh(`/repos/${env.REPOSITORY}/contents/content/posts/${slug}.md?ref=main`);
+      if(role!=='admin'&&sourceActor(decodeGithub(file.content))!==id)throw new PortalError(403,'文章作者记录不一致，请联系管理员。');
+      const resource=`/repos/${env.REPOSITORY}/contents/content/posts/${slug}.md`,body={message:'Delete article: '+slug,sha:file.sha,branch:'main'};
+      if(role==='admin')await gh(resource,'DELETE',body);else await contentWriter(env,fetcher,resource,'DELETE',body);
       return portalJson({deleted:true},200,origin);
     }
     if(resource==='/api/assist' && request.method==='POST') {
@@ -284,5 +311,72 @@ async function handlePortal(request, env, fetcher) {
       return portalJson({text:data.choices?.[0]?.message?.content || '没有返回内容，请重试。'},200,origin);
     }
     throw new PortalError(404,'接口不存在。');
-  } catch(error) { return portalJson({message:error instanceof PortalError ? error.message : '服务暂时不可用，请稍后重试。'},error instanceof PortalError ? error.status : 502,origin); }
+  } catch(error) { return portalJson({message:error instanceof PortalError ? error.message : '服务暂时不可用，请稍后重试。',...(error.check?{check:error.check}:{})},error instanceof PortalError ? error.status : 502,origin); }
+}
+
+// Article ownership is maintained by the server in a separate file.
+// Submission PRs may not modify this file, so displayed names cannot grant delete rights.
+const actorId=identity=>Number.isSafeInteger(identity.user.id)?'github:'+identity.user.id:null;
+async function readOwners(gh,env){
+  try{
+    const file=await gh('/repos/'+env.REPOSITORY+'/contents/content/ownership.json?ref=main');
+    const data=JSON.parse(decodeGithub(file.content));
+    if(data.version!==1||!data.articles||Array.isArray(data.articles))throw new PortalError(503,'文章作者记录格式异常，请联系管理员。');
+    for(const [slug,item]of Object.entries(data.articles))if(!postSlug(slug)||!/^github:\d+$/.test(item?.id||''))throw new PortalError(503,'文章作者记录格式异常，请联系管理员。');
+    return data.articles;
+  }catch(e){if(e.status===404)return {};throw e;}
+}
+function ownerOf(owners,slug){return Object.hasOwn(owners,slug)?owners[slug]:null;}
+async function writeOwner(identity,env,slug,owner,fetcher){
+  if(!owner.id)return;
+  // Read a fresh main tip and commit author metadata + ownership together.
+  // A concurrent change blocks the non-forced ref update instead of overwriting it.
+  const parent=await identity.gh('/repos/'+env.REPOSITORY+'/git/ref/heads/main');
+  const owners=await readOwners(identity.gh,env);
+  const file=await identity.gh('/repos/'+env.REPOSITORY+'/contents/content/posts/'+slug+'.md?ref='+parent.object.sha);
+  const source=decodeGithub(file.content);
+  const front=/^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/.exec(source);
+  if(!front)throw new PortalError(400,'文章元数据无效。');
+  const meta=front[1].replace(/^author_id:.*(?:\r?\n|$)/gm,'');
+  const stamped='---\n'+meta.trimEnd()+'\nauthor_id: '+JSON.stringify(owner.id)+'\n---\n'+source.slice(front[0].length);
+  if(ownerOf(owners,slug)?.id===owner.id&&source===stamped)return;
+  const updated={...owners,[slug]:{id:owner.id,login:owner.login}};
+  const sha=await commitPortalFiles(identity.gh,env.REPOSITORY,parent.object.sha,[
+    {path:'content/ownership.json',encoding:'utf-8',content:JSON.stringify({version:1,articles:updated},null,2)+'\n'},
+    {path:'content/posts/'+slug+'.md',encoding:'utf-8',content:stamped}
+  ],'Record article owner: '+slug);
+  await identity.gh('/repos/'+env.REPOSITORY+'/git/refs/heads/main','PATCH',{sha,force:false});
+}
+function sourceActor(source){
+  const front=/^---\r?\n([\s\S]*?)\r?\n---/.exec(source)?.[1]||'';
+  try{const value=JSON.parse(front.match(/^author_id:\s*(.+)$/m)?.[1]||'null');return typeof value==='string'?value:null;}catch{return null;}
+}
+async function checkSubmissionOwner(identity,env,pr,content){
+  const slug=content.path.split('/').pop().replace(/\.md$/,'');
+  const owners=await readOwners(identity.gh,env),owner=ownerOf(owners,slug);
+  let exists=false;
+  try{await identity.gh('/repos/'+env.REPOSITORY+'/contents/'+content.path+'?ref=main');exists=true;}catch(e){if(e.status!==404)throw e;}
+  const author=Number.isSafeInteger(pr.user?.id)?'github:'+pr.user.id:null;
+  if(exists&&(!author||owner?.id!==author))throw new PortalError(403,'稿件试图覆盖别人的文章，请使用新的文章地址。');
+  return {slug,id:author,login:pr.user.login};
+}
+async function contentWriter(env,fetcher,resource,method='GET',body){
+  if(!env.GITHUB_CONTENT_TOKEN)throw new PortalError(503,'作者删除功能尚未配置，请联系 Lemoncat 添加内容服务授权。');
+  const response=await fetcher('https://api.github.com'+resource,{method,headers:{Accept:'application/vnd.github+json',Authorization:'Bearer '+env.GITHUB_CONTENT_TOKEN,'User-Agent':'lemoncat-content','Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
+  const data=response.status===204?{}:await response.json();
+  if(!response.ok)throw new PortalError(response.status===409?409:502,response.status===409?'文章已变化，请刷新后再删除。':'删除暂未完成，请检查内容服务授权。');
+  return data;
+}
+async function submissionCheck(identity,env,pr){
+  const runs=await identity.gh('/repos/'+env.REPOSITORY+'/actions/runs?head_sha='+pr.head.sha+'&event=pull_request&per_page=30');
+  const run=(runs.workflow_runs||[]).filter(r=>r.head_sha===pr.head.sha&&r.path==='.github/workflows/pages.yml'&&r.event==='pull_request').sort((a,b)=>b.id-a.id)[0];
+  const detailUrl='https://github.com/'+env.REPOSITORY+'/pull/'+pr.number+'/checks';
+  if(!run)return {status:'queued',message:'自动检查尚未开始，请稍后刷新。',url:detailUrl};
+  const url='https://github.com/'+env.REPOSITORY+'/actions/runs/'+run.id;
+  if(run.conclusion==='action_required')return {status:'approval_required',message:'等待你在 GitHub 批准外部投稿运行检查。批准前不会开始，请打开检查详情，点击“Approve and run workflows”。',url};
+  if(run.status!=='completed')return {status:'running',message:'自动检查正在排队或运行。最近检查约 10 秒，整次运行约半分钟，请稍后刷新。',url};
+  if(run.conclusion!=='success')return {status:'failed',message:'自动检查失败，请打开检查详情查看原因；修改稿件后会重新检查。',url};
+  const jobs=await identity.gh('/repos/'+env.REPOSITORY+'/actions/runs/'+run.id+'/jobs?filter=latest&per_page=100');
+  if(!jobs.jobs?.some(j=>j.name==='build'&&j.conclusion==='success'))return {status:'failed',message:'本次运行没有通过网页构建检查。',url};
+  return {status:'success',message:'自动检查已通过，可以审核发布。',url};
 }
