@@ -10,7 +10,7 @@ export async function api(path, options={}) {
   const response=await fetch(WORKER+path,{method:options.method||'GET',headers:{Authorization:'Bearer '+current,...(options.body?{'Content-Type':'application/json'}:{})},...(options.body?{body:JSON.stringify(options.body)}:{}),cache:'no-store'});
   let data;try{data=await response.json();}catch{throw new Error('登录服务需要升级，请先部署新版 Worker。');}
   if(response.status===401){localStorage.removeItem(KEY);}
-  if(!response.ok){const error=new Error(data.message||'操作未完成，请稍后重试。');error.check=data.check;throw error;}
+  if(!response.ok){const error=new Error(data.message||'操作未完成，请稍后重试。');error.check=data.check;error.status=response.status;error.code=data.code;throw error;}
   return data;
 }
 export async function restoreSession(){if(!token())return null;return api('/api/session');}

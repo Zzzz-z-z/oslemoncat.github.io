@@ -21,7 +21,7 @@
 
 ## 开发与验证
 
-需要 Node.js 22 或以上。安装依赖后运行：
+需要 Node.js 24 或以上。安装依赖后运行：
 
 ```sh
 npm ci --ignore-scripts
@@ -66,3 +66,5 @@ duration: 24:10
 ````
 
 ---
+
+文章评论的 D1 初始化、绑定和 Worker 上线步骤见 [COMMENTS_SETUP.md](COMMENTS_SETUP.md)。

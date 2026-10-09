@@ -4,6 +4,8 @@
   "compatibility_date": "2026-10-08",
   "workers_dev": true,
   "keep_vars": true,
+  // Bind COMMENTS_DB in the dashboard; before CLI deployment add d1_databases
+  // with its actual database_id. See ../COMMENTS_SETUP.md.
   "vars": {
     "CMS_ORIGIN": "https://oslemoncat.github.io",
     "REPOSITORY": "oslemoncat/oslemoncat.github.io",

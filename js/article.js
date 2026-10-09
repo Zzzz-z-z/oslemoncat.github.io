@@ -1,10 +1,12 @@
-/* 文章详情页：正文渲染、数学公式、目录、上下篇。 */
+/* 文章详情页：正文渲染、数学公式、目录、上下篇和评论。 */
 import { el, resolveUrl, formatDate, latestDate, detectBase } from '../assets/js/util.js';
 import { loadSite, loadArticles, loadArticleBody, findArticle } from '../assets/js/content.js';
 import { renderMarkdown, typesetMath, buildToc } from '../assets/js/markdown.js';
 import { breadcrumbs, tagList, pager, emptyState } from '../assets/js/layout.js';
 import { initAnchorScroll, initTocHighlight } from '../assets/js/toc.js';
 import {api} from '../assets/js/auth.js?v=20261009-delete-review';
+
+import {createComments} from './comments.js?v=20261009-comments';
 
 const KATEX_CSS = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
 const KATEX_JS = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js';
@@ -216,6 +218,7 @@ export async function renderArticle(container, slug, options = {}) {
 
   const pagerNode = pager(prev, next);
   if (pagerNode) articleEl.appendChild(pagerNode);
+  articleEl.appendChild(createComments(article,user));
 
   container.appendChild(wrap);
   container.dataset.slug = article.slug;

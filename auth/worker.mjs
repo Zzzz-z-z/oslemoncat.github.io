@@ -206,7 +206,9 @@ async function handlePortal(request, env, fetcher) {
     if (!/^[\w.-]+\/[\w.-]+$/.test(env.REPOSITORY || '')) throw new PortalError(503,'网站服务尚未配置。');
     const identity = await portalIdentity(request,env,fetcher), {gh,user,role,repo} = identity;
     const url = new URL(request.url), resource = url.pathname;
-    if (resource === '/api/session' && request.method === 'GET') return portalJson({login:user.login,id:actorId(identity),avatar:user.avatar_url,role,ai:role==='admin' && Boolean(env.DEEPSEEK_API_KEY)},200,origin);
+    const commentsRoute=resource.match(/^\/api\/articles\/([a-z0-9]+(?:-[a-z0-9]+)*)\/comments(?:\/([^/]+))?$/);
+    if(commentsRoute){const result=await handleComments(request,env,identity,commentsRoute[1],commentsRoute[2]);return portalJson(result.data,result.status,origin);}
+    if (resource === '/api/session' && request.method === 'GET') return portalJson({login:user.login,id:actorId(identity),avatar:user.avatar_url,role,comments:Boolean(env.COMMENTS_DB?.prepare),ai:role==='admin' && Boolean(env.DEEPSEEK_API_KEY)},200,origin);
     if (resource === '/api/submissions' && request.method === 'GET') {
       const page = Math.max(1, Math.min(100, Number(url.searchParams.get('page')) || 1));
       const prs = await gh(`/repos/${env.REPOSITORY}/pulls?state=all&base=main&sort=updated&per_page=100&page=${page}`);
@@ -311,7 +313,7 @@ async function handlePortal(request, env, fetcher) {
       return portalJson({text:data.choices?.[0]?.message?.content || '没有返回内容，请重试。'},200,origin);
     }
     throw new PortalError(404,'接口不存在。');
-  } catch(error) { return portalJson({message:error instanceof PortalError ? error.message : '服务暂时不可用，请稍后重试。',...(error.check?{check:error.check}:{})},error instanceof PortalError ? error.status : 502,origin); }
+  } catch(error) { return portalJson({message:error instanceof PortalError ? error.message : '服务暂时不可用，请稍后重试。',...(error.check?{check:error.check}:{}),...(error.code?{code:error.code}:{})},error instanceof PortalError ? error.status : 502,origin); }
 }
 
 // Article ownership is maintained by the server in a separate file.
@@ -379,4 +381,99 @@ async function submissionCheck(identity,env,pr){
   const jobs=await identity.gh('/repos/'+env.REPOSITORY+'/actions/runs/'+run.id+'/jobs?filter=latest&per_page=100');
   if(!jobs.jobs?.some(j=>j.name==='build'&&j.conclusion==='success'))return {status:'failed',message:'本次运行没有通过网页构建检查。',url};
   return {status:'success',message:'自动检查已通过，可以审核发布。',url};
+}
+
+// Article comments use the existing authenticated GitHub identity and a D1 binding.
+const commentId = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+function commentError(status,message,code){const error=new PortalError(status,message);error.code=code;return error;}
+async function commentInput(request){
+  if(Number(request.headers.get('Content-Length')||0)>12000)throw new PortalError(413,'评论内容过长。');
+  const raw=await request.text();if(raw.length>6000)throw new PortalError(413,'评论内容过长。');
+  let input;try{input=JSON.parse(raw);}catch{throw new PortalError(400,'评论格式无效。');}
+  if(!input||typeof input.body!=='string')throw new PortalError(400,'请填写评论内容。');
+  const body=input.body.replace(/\r\n?/g,'\n').trim();
+  if(!body||body.length>2000||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(body))throw new PortalError(400,'评论需要 1 至 2000 字。');
+  return {...input,body};
+}
+function commentView(row,identity){
+  const own=row.author_id===actorId(identity);
+  return {id:row.id,body:row.body,author:row.author_login,avatar:'https://avatars.githubusercontent.com/u/'+row.author_id.slice(7)+'?s=80&v=4',
+    createdAt:row.created_at,updatedAt:row.updated_at,canEdit:own,canDelete:own||identity.role==='admin'};
+}
+async function publishedCommentArticle(identity,env,slug){
+  if(!postSlug(slug))throw new PortalError(400,'文章地址无效。');
+  const source=await identity.gh('/repos/'+env.REPOSITORY+'/contents/content/posts/'+slug+'.md?ref=main');
+  const front=/^---\r?\n([\s\S]*?)\r?\n---/.exec(decodeGithub(source.content));
+  if(!front||/^draft:\s*true\s*$/im.test(front[1]))throw new PortalError(404,'文章尚未发布或已删除。');
+}
+async function handleComments(request,env,identity,slug,id){
+  if(!env.COMMENTS_DB?.prepare)throw commentError(503,'评论尚未开放，请稍后再来。','COMMENTS_NOT_CONFIGURED');
+  if(id&&!commentId(id))throw new PortalError(400,'评论地址无效。');
+  const method=request.method;
+  if((!id&&!['GET','POST'].includes(method))||(id&&!['PATCH','DELETE'].includes(method)))throw new PortalError(405,'不支持这个评论操作。');
+  const actor=actorId(identity);
+  if(!actor)throw new PortalError(403,'无法确认评论账号，请重新登录。');
+  await publishedCommentArticle(identity,env,slug);
+  const db=env.COMMENTS_DB;
+  try{
+    if(!id&&method==='GET'){
+      const url=new URL(request.url),raw=url.searchParams.get('cursor');
+      let cursor=null;
+      if(raw){
+        try{cursor=JSON.parse(new TextDecoder().decode(unb64(raw)));}catch{throw new PortalError(400,'评论分页地址无效，请刷新。');}
+        if(!Array.isArray(cursor)||cursor.length!==2||!Number.isSafeInteger(cursor[0])||cursor[0]<0||!commentId(cursor[1]))throw new PortalError(400,'评论分页地址无效，请刷新。');
+      }
+      const size=20;
+      const statement=cursor
+        ?db.prepare('SELECT * FROM comments WHERE article_slug=?1 AND (created_at<?2 OR (created_at=?2 AND id<?3)) ORDER BY created_at DESC,id DESC LIMIT ?4').bind(slug,cursor[0],cursor[1],size+1)
+        :db.prepare('SELECT * FROM comments WHERE article_slug=?1 ORDER BY created_at DESC,id DESC LIMIT ?2').bind(slug,size+1);
+      const [page,count]=await db.batch([statement,db.prepare('SELECT COUNT(*) AS total FROM comments WHERE article_slug=?1').bind(slug)]);
+      const rows=page.results.slice(0,size),last=rows.at(-1);
+      return {status:200,data:{items:rows.map(row=>commentView(row,identity)),total:count.results[0].total,nextCursor:page.results.length>size?b64(encoder.encode(JSON.stringify([last.created_at,last.id]))):null}};
+    }
+    if(!id&&method==='POST'){
+      const input=await commentInput(request);
+      if(!commentId(input.requestId))throw new PortalError(400,'提交标识无效，请刷新后重试。');
+      const previous=await db.prepare('SELECT * FROM comments WHERE id=?1').bind(input.requestId).first();
+      const same=row=>row&&row.author_id===actor&&row.article_slug===slug&&row.body===input.body;
+      if(previous){
+        if(!same(previous))throw new PortalError(409,'这次提交已经变化，请刷新后重试。');
+        return {status:200,data:{item:commentView(previous,identity),created:false}};
+      }
+      const now=Date.now(),reservation=crypto.randomUUID();
+      // D1 batch is transactional; a request-specific reservation survives deletion.
+      const [,result]=await db.batch([
+        db.prepare('INSERT INTO comment_rate_limits (author_id,reservation_id,last_post_at) VALUES (?1,?2,?3) ON CONFLICT(author_id) DO UPDATE SET reservation_id=excluded.reservation_id,last_post_at=excluded.last_post_at WHERE comment_rate_limits.last_post_at<=?4').bind(actor,reservation,now,now-20000),
+        db.prepare('INSERT INTO comments (id,article_slug,author_id,author_login,body,created_at,updated_at) SELECT ?1,?2,?3,?4,?5,?6,?6 WHERE EXISTS (SELECT 1 FROM comment_rate_limits WHERE author_id=?3 AND reservation_id=?7) ON CONFLICT(id) DO NOTHING').bind(input.requestId,slug,actor,identity.user.login,input.body,now,reservation)
+      ]);
+      const row=await db.prepare('SELECT * FROM comments WHERE id=?1').bind(input.requestId).first();
+      if(!result.meta.changes){
+        if(same(row))return {status:200,data:{item:commentView(row,identity),created:false}};
+        if(row)throw new PortalError(409,'提交标识已使用，请刷新后重试。');
+        throw commentError(429,'评论发表得太快，请间隔 20 秒再试。','COMMENTS_RATE_LIMITED');
+      }
+      return {status:201,data:{item:commentView(row,identity),created:true}};
+    }
+    const row=await db.prepare('SELECT * FROM comments WHERE id=?1 AND article_slug=?2').bind(id,slug).first();
+    if(!row)throw new PortalError(404,'评论已删除或不属于这篇文章。');
+    if(method==='PATCH'){
+      if(row.author_id!==actor)throw new PortalError(403,'只能编辑自己的评论。');
+      const input=await commentInput(request);
+      if(input.updatedAt!==row.updated_at)throw new PortalError(409,'评论已变化，请刷新后再编辑。');
+      const updated=Math.max(Date.now(),row.updated_at+1);
+      const result=await db.prepare('UPDATE comments SET body=?1,updated_at=?2 WHERE id=?3 AND article_slug=?4 AND author_id=?5 AND updated_at=?6')
+        .bind(input.body,updated,id,slug,actor,input.updatedAt).run();
+      if(!result.meta.changes)throw new PortalError(409,'评论已变化，请刷新后再编辑。');
+      return {status:200,data:{item:commentView({...row,body:input.body,updated_at:updated},identity)}};
+    }
+    if(identity.role!=='admin'&&row.author_id!==actor)throw new PortalError(403,'只能删除自己的评论。');
+    const statement=identity.role==='admin'
+      ?db.prepare('DELETE FROM comments WHERE id=?1 AND article_slug=?2').bind(id,slug)
+      :db.prepare('DELETE FROM comments WHERE id=?1 AND article_slug=?2 AND author_id=?3').bind(id,slug,actor);
+    await statement.run();
+    return {status:200,data:{deleted:true}};
+  }catch(error){
+    if(error instanceof PortalError)throw error;
+    throw commentError(503,'评论暂时不可用，请稍后重试。','COMMENTS_UNAVAILABLE');
+  }
 }

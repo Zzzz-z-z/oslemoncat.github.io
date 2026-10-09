@@ -48,3 +48,7 @@
 ## 删除与检查提示更新
 
 文章详情页新增删除按钮，普通用户有“我的文章”列表。新版本及后台授权步骤见 [DELETE_REVIEW_SETUP.md](DELETE_REVIEW_SETUP.md)。邮箱注册暂缓，本次保留 GitHub 登录。
+
+## 文章评论
+
+正文下方新增评论区，沿用 GitHub 登录，评论直接展示。普通用户可以编辑、删除本人评论，管理员可以删除所有评论。数据通过 Worker 写入 D1，需在 Cloudflare 绑定 COMMENTS_DB 并初始化表；具体设置见 [COMMENTS_SETUP.md](COMMENTS_SETUP.md)。
