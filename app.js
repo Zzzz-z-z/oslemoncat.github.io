@@ -27,7 +27,7 @@ const LOADERS = {
   modules: () => import('./js/modules.js').then((mod) => mod.renderModules),
   module: () => import('./js/module.js').then((mod) => mod.renderModule),
   articles: () => import('./js/articles.js').then((mod) => mod.renderArticles),
-  article: () => import('./js/article.js?v=20261009-delete-review').then((mod) => mod.renderArticle),
+  article: () => import('./js/article.js?v=20261009-delete-review2').then((mod) => mod.renderArticle),
   about: () => import('./js/about.js').then((mod) => mod.renderAbout),
 };
 
