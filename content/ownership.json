@@ -1,6 +1,10 @@
 {
   "version": 1,
   "articles": {
+    "111": {
+      "id": "github:313387258",
+      "login": "oslemoncat"
+    },
     "exercise": {
       "id": "github:305797597",
       "login": "serein-Ian"
