@@ -61,6 +61,7 @@ const errorResponse = (message, status) => new Response(message, { status, heade
 
 export async function handleRequest(request, env, fetcher = fetch) {
   const url = new URL(request.url);
+  if (url.pathname.startsWith('/api/')) return handlePortal(request, env, fetcher);
   if (request.method !== 'GET') return errorResponse('Method not allowed', 405);
   if (url.pathname === '/health') return new Response('ok', { headers: baseHeaders });
   if (!['/auth', '/callback'].includes(url.pathname)) return errorResponse('Not found', 404);
@@ -74,9 +75,10 @@ export async function handleRequest(request, env, fetcher = fetch) {
     if (url.searchParams.get('provider') !== 'github' || url.searchParams.get('site_id') !== cms.hostname) return errorResponse('Invalid provider or site', 400);
     const state = random(), verifier = random();
     const challenge = b64(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(verifier))));
-    const session = await signSession({ state, verifier, expires: Date.now() + 600_000 }, env.OAUTH_STATE_SECRET);
+    const portal = url.searchParams.get('mode') === 'portal';
+    const session = await signSession({ state, verifier, portal, expires: Date.now() + 600_000 }, env.OAUTH_STATE_SECRET);
     const authorize = new URL('https://github.com/login/oauth/authorize');
-    authorize.search = new URLSearchParams({ client_id: env.GITHUB_CLIENT_ID, redirect_uri: callback.href, scope: 'public_repo', state, code_challenge: challenge, code_challenge_method: 'S256', allow_signup: 'false', login: env.ALLOWED_GITHUB_LOGIN }).toString();
+    authorize.search = new URLSearchParams({ client_id: env.GITHUB_CLIENT_ID, redirect_uri: callback.href, scope: 'public_repo', state, code_challenge: challenge, code_challenge_method: 'S256', allow_signup: 'true', ...(portal ? {} : { login: adminNames(env)[0] }) }).toString();
     return new Response(null, { status: 302, headers: { ...baseHeaders, Location: authorize.href, 'Set-Cookie': `${cookieName}=${session}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600` } });
   }
   let session;
@@ -98,11 +100,189 @@ export async function handleRequest(request, env, fetcher = fetch) {
     const headers = { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token.access_token}`, 'User-Agent': 'oslemoncat-decap-oauth' };
     const userResponse = await fetcher('https://api.github.com/user', { headers });
     const user = await userResponse.json();
-    if (!userResponse.ok || user.login?.toLowerCase() !== env.ALLOWED_GITHUB_LOGIN.toLowerCase()) return popup(cms.origin, 'error', { message: '这个 GitHub 账号没有本站的管理权限。' }, 403);
+    if (!userResponse.ok || (!session.portal && !adminNames(env).includes(user.login?.toLowerCase()))) return popup(cms.origin, 'error', { message: '这个 GitHub 账号没有本站的管理权限。' }, 403);
     const repoResponse = await fetcher(`https://api.github.com/repos/${env.REPOSITORY}`, { headers });
     const repo = await repoResponse.json();
-    if (!repoResponse.ok || repo.permissions?.push !== true || repo.private !== false || repo.full_name?.toLowerCase() !== env.REPOSITORY.toLowerCase()) return popup(cms.origin, 'error', { message: '需要对本站公开仓库拥有写入权限。' }, 403);
-    return popup(cms.origin, 'success', { token: token.access_token, provider: 'github' });
+    if (!repoResponse.ok || (!session.portal && repo.permissions?.push !== true) || repo.private !== false || repo.full_name?.toLowerCase() !== env.REPOSITORY.toLowerCase()) return popup(cms.origin, 'error', { message: '需要对本站公开仓库拥有写入权限。' }, 403);
+    return popup(cms.origin, 'success', { token: token.access_token, provider: 'github', ...(session.portal ? { portal: true } : {}) });
   } catch { return popup(cms.origin, 'error', { message: 'GitHub 登录服务暂时不可用，请稍后重试。' }, 502); }
 }
 export default { fetch(request, env) { return handleRequest(request, env); } };
+
+// Unified website API. GitHub identities and permissions are checked on every request.
+class PortalError extends Error { constructor(status, message) { super(message); this.status = status; } }
+const postSlug = value => typeof value === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value) && value.length <= 100;
+const adminNames = env => String(env.ALLOWED_GITHUB_LOGIN || '').toLowerCase().split(',').map(x => x.trim()).filter(Boolean);
+const decodeGithub = text => new TextDecoder().decode(unb64(String(text).replace(/\s/g, '').replaceAll('+', '-').replaceAll('/', '_')));
+function portalJson(data, status, origin) {
+  return Response.json(data, { status, headers: { ...baseHeaders, 'Access-Control-Allow-Origin': origin, 'Vary': 'Origin', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Authorization, Content-Type' } });
+}
+async function portalIdentity(request, env, fetcher) {
+  const token = request.headers.get('Authorization')?.match(/^Bearer ([\w.-]{1,512})$/)?.[1];
+  if (!token) throw new PortalError(401, '请先登录。');
+  const gh = async (resource, method = 'GET', body) => {
+    const response = await fetcher('https://api.github.com' + resource, { method, headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'User-Agent': 'lemoncat-hub', 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    const data = response.status === 204 ? {} : await response.json();
+    if (!response.ok) throw new PortalError(response.status === 401 ? 401 : response.status, response.status === 401 ? '登录已失效，请重新登录。' : response.status === 403 ? 'GitHub 权限不足或请求过于频繁，请稍后重试。' : response.status === 404 ? '内容暂时不存在。' : 'GitHub 未能完成操作，请稍后重试。');
+    return data;
+  };
+  const user = await gh('/user');
+  const repo = await gh(`/repos/${env.REPOSITORY}`);
+  if (!user.login || repo.private !== false || repo.full_name?.toLowerCase() !== env.REPOSITORY.toLowerCase()) throw new PortalError(403, '网站仓库配置不正确。');
+  return { gh, user, repo, role: adminNames(env).includes(user.login.toLowerCase()) && repo.permissions?.push === true ? 'admin' : 'member' };
+}
+const needAdmin = identity => { if (identity.role !== 'admin') throw new PortalError(403, '只有管理员可以审核、发布或删除文章。'); };
+async function readPortalBody(request) {
+  if (Number(request.headers.get('Content-Length') || 0) > 30_000_000) throw new PortalError(413, '本次附件总量过大，请分批提交。');
+  const text = await request.text();
+  if (text.length > 30_000_000) throw new PortalError(413, '本次附件总量过大，请分批提交。');
+  try { return JSON.parse(text); } catch { throw new PortalError(400, '提交内容格式错误。'); }
+}
+async function submissionDocuments(input, identity, env) {
+  const p = input.post || {};
+  if (!postSlug(p.slug) || typeof p.title !== 'string' || !p.title.trim() || p.title.length > 160 || typeof p.body !== 'string' || !p.body.trim() || p.body.length > 400_000) throw new PortalError(400, '请填写有效的文章地址、标题和正文。');
+  const modulesFile = await identity.gh(`/repos/${env.REPOSITORY}/contents/content/modules.json`);
+  const modules = JSON.parse(decodeGithub(modulesFile.content));
+  if (!modules.some(x => x.slug === p.module)) throw new PortalError(400, '请选择有效的知识模块。');
+  const isDate = value => { if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false; const time = Date.parse(value + 'T00:00:00Z'); return Number.isFinite(time) && new Date(time).toISOString().slice(0,10) === value; };
+  if (!isDate(p.date) || !isDate(p.updated) || p.updated < p.date) throw new PortalError(400, '文章日期无效。');
+  const tags = Array.isArray(p.tags) ? p.tags.filter(x => typeof x === 'string' && x.length <= 40).slice(0,20) : [];
+  const images = Array.isArray(p.images) ? p.images.slice(0,30) : [];
+  const attachments = Array.isArray(p.attachments) ? p.attachments.slice(0,30) : [];
+  for (const [records,key,prefix] of [[images,'src','/assets/images/'],[attachments,'file','/assets/files/']]) {
+    if (records.some(x => !x || typeof x[key] !== 'string' || !x[key].startsWith(prefix) || /[\\\u0000-\u001f]/.test(x[key]) || x[key].split('/').includes('..') || ['caption','title'].some(k => x[k] != null && (typeof x[k] !== 'string' || x[k].length > 300)))) throw new PortalError(400, '附件地址无效。');
+  }
+  const files = Array.isArray(input.files) ? input.files : [];
+  if (files.length > 12) throw new PortalError(400, '一次最多上传 12 个文件。');
+  let bytes = 0;
+  const documents = [];
+  const seen = new Set();
+  for (const f of files) {
+    const isImage = /^assets\/images\/uploads\/[a-z0-9-]{1,120}\.(png|jpg|jpeg|gif|webp|avif)$/i.test(f.path || '');
+    const isFile = /^assets\/files\/uploads\/[a-z0-9-]{1,120}\.(pdf|docx?|xlsx?|pptx?|txt|md|csv|zip|mp4|webm|ogv|mp3|m4a|wav|ogg|oga|flac)$/i.test(f.path || '');
+    if ((!isImage && !isFile) || typeof f.content !== 'string' || f.content.length % 4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(f.content) || seen.has(f.path)) throw new PortalError(400, '文件名称或类型无效。');
+    seen.add(f.path);
+    const size = f.content.length * 3 / 4 - (f.content.endsWith('==') ? 2 : f.content.endsWith('=') ? 1 : 0);
+    if (size > (isImage ? 10 : 20) * 1024 * 1024 || (bytes += size) > 20 * 1024 * 1024) throw new PortalError(413, '图片最多 10 MB、附件最多 20 MB，本次文件总量最多 20 MB。');
+    documents.push({ path: f.path, content: f.content, encoding: 'base64' });
+  }
+  const meta = { slug:p.slug, title:p.title.trim(), summary:String(p.summary || '').slice(0,1000), module:p.module, date:p.date, updated:p.updated, tags, cover:images[0]?.src || p.cover || '', order:0, draft:false, images, attachments, author:identity.user.login };
+  if (meta.cover && (!meta.cover.startsWith('/assets/images/') && !meta.cover.startsWith('assets/images/'))) throw new PortalError(400, '封面图地址无效。');
+  const source = '---\n' + Object.entries(meta).map(([key,value]) => key + ': ' + JSON.stringify(value)).join('\n') + '\n---\n' + p.body.trim() + '\n';
+  documents.push({ path:`content/posts/${p.slug}.md`, content:source, encoding:'utf-8' });
+  return { documents, post:meta };
+}
+async function commitPortalFiles(gh, repository, parentSha, documents, message) {
+  const parent = await gh(`/repos/${repository}/git/commits/${parentSha}`);
+  const tree = [];
+  for (const document of documents) {
+    const blob = await gh(`/repos/${repository}/git/blobs`, 'POST', { content:document.content, encoding:document.encoding });
+    tree.push({ path:document.path, mode:'100644', type:'blob', sha:blob.sha });
+  }
+  const createdTree = await gh(`/repos/${repository}/git/trees`, 'POST', { base_tree:parent.tree.sha, tree });
+  const commit = await gh(`/repos/${repository}/git/commits`, 'POST', { message, tree:createdTree.sha, parents:[parentSha] });
+  return commit.sha;
+}
+async function getPortalSubmission(identity, env, number) {
+  const pr = await identity.gh(`/repos/${env.REPOSITORY}/pulls/${number}`);
+  if (pr.base?.repo?.full_name?.toLowerCase() !== env.REPOSITORY.toLowerCase() || pr.base.ref !== 'main' || !/^lemoncat\/submission-[a-z0-9-]+$/.test(pr.head?.ref || '') || !pr.title?.startsWith('[投稿] ')) throw new PortalError(404, '这不是本站的文章投稿。');
+  if (identity.role !== 'admin' && pr.user?.login?.toLowerCase() !== identity.user.login.toLowerCase()) throw new PortalError(403, '只能查看或修改自己的投稿。');
+  return pr;
+}
+async function inspectPortalSubmission(identity, env, pr) {
+  if (pr.changed_files > 50) throw new PortalError(400, '稿件修改的文件过多。');
+  const files = await identity.gh(`/repos/${env.REPOSITORY}/pulls/${pr.number}/files?per_page=100`);
+  if (files.length !== pr.changed_files) throw new PortalError(409, '文件列表尚未完整，请刷新后重试。');
+  const posts = files.filter(f => /^content\/posts\/[a-z0-9]+(?:-[a-z0-9]+)*\.md$/.test(f.filename));
+  if (posts.length !== 1 || files.some(f => !['added','modified'].includes(f.status) || (!posts.includes(f) && (f.status !== 'added' || !/^assets\/(images|files)\/uploads\/[a-z0-9-]+\.(png|jpg|jpeg|gif|webp|avif|pdf|docx?|xlsx?|pptx?|txt|md|csv|zip|mp4|webm|ogv|mp3|m4a|wav|ogg|oga|flac)$/i.test(f.filename))))) throw new PortalError(403, '稿件包含文章和媒体以外的改动，不能从这里发布。');
+  const source = await identity.gh(`/repos/${pr.head.repo.full_name}/contents/${posts[0].filename}?ref=${pr.head.sha}`);
+  return { files, source:decodeGithub(source.content), path:posts[0].filename };
+}
+async function handlePortal(request, env, fetcher) {
+  const origin = request.headers.get('Origin');
+  if (!origin || origin !== env.CMS_ORIGIN) return errorResponse('Origin not allowed',403);
+  if (request.method === 'OPTIONS') return portalJson({},200,origin);
+  try {
+    if (!/^[\w.-]+\/[\w.-]+$/.test(env.REPOSITORY || '')) throw new PortalError(503,'网站服务尚未配置。');
+    const identity = await portalIdentity(request,env,fetcher), {gh,user,role,repo} = identity;
+    const url = new URL(request.url), resource = url.pathname;
+    if (resource === '/api/session' && request.method === 'GET') return portalJson({login:user.login,avatar:user.avatar_url,role,ai:role==='admin' && Boolean(env.DEEPSEEK_API_KEY)},200,origin);
+    if (resource === '/api/submissions' && request.method === 'GET') {
+      const page = Math.max(1, Math.min(100, Number(url.searchParams.get('page')) || 1));
+      const prs = await gh(`/repos/${env.REPOSITORY}/pulls?state=all&base=main&sort=updated&per_page=100&page=${page}`);
+      return portalJson({items:prs.filter(p=>p.title?.startsWith('[投稿] ') && p.head?.ref?.startsWith('lemoncat/submission-') && (role==='admin' || p.user?.login?.toLowerCase()===user.login.toLowerCase())).map(p=>({number:p.number,title:p.title.slice(5),author:p.user?.login,state:p.merged_at?'published':p.state==='open'?'pending':'closed',sha:p.head.sha,date:p.updated_at,url:p.html_url})), hasMore:prs.length===100},200,origin);
+    }
+    if (resource === '/api/submissions' && request.method === 'POST') {
+      const input = await readPortalBody(request), {documents,post} = await submissionDocuments(input,identity,env);
+      const source = await gh(`/repos/${env.REPOSITORY}/git/ref/heads/main`);
+      const forkName = env.REPOSITORY.split('/')[1];
+      let fork;
+      try { fork = await gh(`/repos/${user.login}/${forkName}`); } catch(error) { if(error.status!==404)throw error; fork = await gh(`/repos/${env.REPOSITORY}/forks`,'POST',{}); }
+      if (fork.full_name?.toLowerCase()===env.REPOSITORY.toLowerCase()) throw new PortalError(400,'管理员请直接发布文章。');
+      if (!fork.fork || fork.parent?.full_name?.toLowerCase()!==env.REPOSITORY.toLowerCase() || fork.owner?.login?.toLowerCase()!==user.login.toLowerCase()) throw new PortalError(409,'同名仓库不属于本站投稿空间，请先在 GitHub 调整同名仓库。');
+      const branch = 'lemoncat/submission-' + crypto.randomUUID();
+      try { await gh(`/repos/${fork.full_name}/git/refs`,'POST',{ref:'refs/heads/'+branch,sha:source.object.sha}); } catch(error) { if(error.status===422 || error.status===409) throw new PortalError(409,'GitHub 正在准备你的稿件空间，请稍后再次提交。'); throw error; }
+      const sha = await commitPortalFiles(gh,fork.full_name,source.object.sha,documents,'Submit article: '+post.title);
+      await gh(`/repos/${fork.full_name}/git/refs/heads/${branch}`,'PATCH',{sha,force:false});
+      const pr = await gh(`/repos/${env.REPOSITORY}/pulls`,'POST',{title:'[投稿] '+post.title,body:'由 '+user.login+' 提交，等待 Lemoncat 审核。\n\n知识模块：'+post.module,head:user.login+':'+branch,base:'main'});
+      return portalJson({number:pr.number,url:pr.html_url},201,origin);
+    }
+    const submissionMatch = resource.match(/^\/api\/submissions\/(\d+)$/);
+    if (submissionMatch && request.method==='GET') {
+      const pr = await getPortalSubmission(identity,env,submissionMatch[1]);
+      const content = await inspectPortalSubmission(identity,env,pr);
+      return portalJson({number:pr.number,title:pr.title.slice(5),author:pr.user.login,sha:pr.head.sha,state:pr.state,source:content.source,mediaBase:`https://raw.githubusercontent.com/${pr.head.repo.full_name}/${pr.head.sha}/`,files:content.files.map(f=>({path:f.filename,status:f.status}))},200,origin);
+    }
+    if (submissionMatch && request.method==='PATCH') {
+      const pr = await getPortalSubmission(identity,env,submissionMatch[1]);
+      if(pr.state!=='open' || pr.user.login.toLowerCase()!==user.login.toLowerCase()) throw new PortalError(403,'只能修改自己尚未审核的投稿。');
+      const current = await inspectPortalSubmission(identity,env,pr), input = await readPortalBody(request);
+      const {documents,post} = await submissionDocuments(input,identity,env);
+      if(current.path!==`content/posts/${post.slug}.md` || input.sha!==pr.head.sha) throw new PortalError(409,'稿件已经变化，请刷新；修改时请保持文章地址。');
+      const sha = await commitPortalFiles(gh,pr.head.repo.full_name,pr.head.sha,documents,'Update article: '+post.title);
+      await gh(`/repos/${pr.head.repo.full_name}/git/refs/heads/${pr.head.ref}`,'PATCH',{sha,force:false});
+      await gh(`/repos/${env.REPOSITORY}/pulls/${pr.number}`,'PATCH',{title:'[投稿] '+post.title});
+      return portalJson({number:pr.number,sha},200,origin);
+    }
+    const reviewMatch = resource.match(/^\/api\/submissions\/(\d+)\/review$/);
+    if(reviewMatch && request.method==='POST') {
+      needAdmin(identity);
+      const input=await readPortalBody(request),pr=await getPortalSubmission(identity,env,reviewMatch[1]);
+      if(pr.state!=='open' || input.sha!==pr.head.sha) throw new PortalError(409,'稿件已变化或已处理，请重新打开。');
+      if(input.action==='reject') { await gh(`/repos/${env.REPOSITORY}/pulls/${pr.number}`,'PATCH',{state:'closed'}); return portalJson({state:'closed'},200,origin); }
+      if(input.action!=='publish') throw new PortalError(400,'审核操作无效。');
+      await inspectPortalSubmission(identity,env,pr);
+      const checks=await gh(`/repos/${env.REPOSITORY}/commits/${pr.head.sha}/check-runs`);
+      if(!checks.check_runs?.some(c=>c.name==='build' && c.conclusion==='success' && c.app?.slug==='github-actions')) throw new PortalError(409,'自动检查尚未通过，请稍后刷新再发布。');
+      const merged=await gh(`/repos/${env.REPOSITORY}/pulls/${pr.number}/merge`,'PUT',{sha:pr.head.sha,merge_method:'squash',commit_title:'Publish article: '+pr.title.slice(5)});
+      if(!merged.merged) throw new PortalError(409,'文章暂时不能发布，请检查合并冲突。');
+      return portalJson({state:'published'},200,origin);
+    }
+    if(resource==='/api/articles' && request.method==='POST') {
+      needAdmin(identity);
+      const {documents,post}=await submissionDocuments(await readPortalBody(request),identity,env);
+      const source=await gh(`/repos/${env.REPOSITORY}/git/ref/heads/main`);
+      const sha=await commitPortalFiles(gh,env.REPOSITORY,source.object.sha,documents,'Publish article: '+post.title);
+      await gh(`/repos/${env.REPOSITORY}/git/refs/heads/main`,'PATCH',{sha,force:false});
+      return portalJson({slug:post.slug,sha},201,origin);
+    }
+    const deleteMatch=resource.match(/^\/api\/articles\/([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+    if(deleteMatch && request.method==='DELETE') {
+      needAdmin(identity);
+      const file=await gh(`/repos/${env.REPOSITORY}/contents/content/posts/${deleteMatch[1]}.md?ref=main`);
+      await gh(`/repos/${env.REPOSITORY}/contents/content/posts/${deleteMatch[1]}.md`,'DELETE',{message:'Delete article: '+deleteMatch[1],sha:file.sha,branch:'main'});
+      return portalJson({deleted:true},200,origin);
+    }
+    if(resource==='/api/assist' && request.method==='POST') {
+      needAdmin(identity);
+      if(!env.DEEPSEEK_API_KEY) throw new PortalError(503,'DeepSeek 尚未配置，请先添加 API Key。');
+      const input=await readPortalBody(request);
+      if(typeof input.prompt!=='string' || !input.prompt.trim() || input.prompt.length>6000) throw new PortalError(400,'请输入 6000 字以内的需求。');
+      const response=await fetcher('https://api.deepseek.com/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+env.DEEPSEEK_API_KEY},body:JSON.stringify({model:env.DEEPSEEK_MODEL || 'deepseek-flash',messages:[{role:'system',content:'你是 Lemoncat 的网站与写作助手。用中文给出清晰的设计、代码或写作建议。提供建议，不声称已替用户发布或修改网站。'},{role:'user',content:input.prompt}],max_tokens:1800,stream:false}),signal:AbortSignal.timeout(45000)});
+      if(!response.ok) throw new PortalError(502,'DeepSeek 请求未完成，请检查密钥、余额或稍后重试。');
+      const data=await response.json();
+      return portalJson({text:data.choices?.[0]?.message?.content || '没有返回内容，请重试。'},200,origin);
+    }
+    throw new PortalError(404,'接口不存在。');
+  } catch(error) { return portalJson({message:error instanceof PortalError ? error.message : '服务暂时不可用，请稍后重试。'},error instanceof PortalError ? error.status : 502,origin); }
+}

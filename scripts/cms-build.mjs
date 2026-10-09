@@ -16,6 +16,7 @@ export async function buildSite(root, out) {
   for (const name of ['index.html', '404.html', 'app.js', '.nojekyll', 'assets', 'js', 'admin']) {
     await cp(path.join(root, name), path.join(out, name), { recursive: true });
   }
+  try{await lstat(path.join(root,'lemon-cat'));await cp(path.join(root,'lemon-cat'),path.join(out,'lemon-cat'),{recursive:true});}catch(e){if(e.code!=='ENOENT')throw e;}
   // Keep existing content-layer side files; author sources and legacy indexes are excluded.
   const { readdir, readFile } = await import('node:fs/promises');
   for (const name of await readdir(path.join(root, 'content'))) {
@@ -33,11 +34,9 @@ export async function buildSite(root, out) {
   const config = YAML.parse(await readFile(path.join(root, 'admin/config.yml'), 'utf8'));
   config.collections.find(x => x.name === 'posts').fields.find(x => x.name === 'module').options = modules.map(x => ({ label: x.title, value: x.slug }));
   await writeFile(path.join(out, 'admin/config.yml'), YAML.stringify(config));
-  const site = await readJson(path.join(out, 'content/site.json'));
-  if (!site.nav.some(item => item.href === 'admin/' || item.href === '/admin/')) {
-    site.nav.push({ label: '文章管理', href: 'admin/' });
-    await writeFile(path.join(out, 'content/site.json'), JSON.stringify(site, null, 2) + '\n');
-  }
+  const template=await readFile(path.join(out,'index.html'),'utf8');
+  const routes=['modules','articles','about','login','workspace','workspace/submissions','workspace/review','workspace/published','workspace/assist',...modules.map(m=>{if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(m.slug))throw new Error('Invalid module slug');return 'module/'+m.slug;}),...published.map(p=>'article/'+p.slug)];
+  for(const route of routes){await mkdir(path.join(out,route),{recursive:true});await writeFile(path.join(out,route,'index.html'),template);}
   return { total: posts.length, published: published.length };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

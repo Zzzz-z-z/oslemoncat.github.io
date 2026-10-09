@@ -1,0 +1,96 @@
+import {el,debounce} from '../assets/js/util.js';
+import {api,logout} from '../assets/js/auth.js';
+import {loadModules,loadArticles,loadArticleBody} from '../assets/js/content.js';
+import {renderMarkdown} from '../assets/js/markdown.js';
+import {pageHead} from '../assets/js/layout.js';
+const today=()=>new Date(Date.now()+8*3600_000).toISOString().slice(0,10);
+const labels={pending:'等待审核',published:'已发布',closed:'未通过'};
+function generatedPost(source){const match=/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(source);if(!match)throw new Error('无法读取稿件。');const post={body:match[2]};for(const line of match[1].split('\n')){const field=/^([a-z]+):\s*(.*)$/.exec(line);if(field){try{post[field[1]]=JSON.parse(field[2]);}catch{post[field[1]]=field[2];}}}return post;}
+export async function renderWorkspace(container,params=new URLSearchParams()){
+  const user=window.__LEMONCAT_USER__;if(!user)return;
+  const admin=user.role==='admin',view=params.get('view')||'editor';
+  const wrap=el('div',{class:'wrap workspace'});
+  const head=pageHead('写作区',admin?'欢迎回来。整理自己的文章，也看看大家的新投稿。':'把今天的发现写下来，提交后等待 Lemoncat 审核。');
+  const tabs=el('nav',{class:'workspace-nav','aria-label':'写作区导航'});
+  const navs=[['editor','写文章','/workspace/'],['submissions',admin?'全部投稿':'我的投稿','/workspace/submissions/'],...(admin?[['review','文章审核','/workspace/review/'],['published','已发布文章','/workspace/published/'],['assist','DeepSeek 助手','/workspace/assist/']]:[])];
+  for(const [key,label,href]of navs)tabs.append(el('a',{href,text:label,...(view===key?{'aria-current':'page'}:{})}));
+  const signout=el('button',{class:'text-button',type:'button',text:'退出登录'});signout.addEventListener('click',logout);tabs.append(signout);
+  const status=el('p',{class:'form-status',role:'status'}),stage=el('section',{class:'workspace-stage'});
+  wrap.append(head,tabs,status,stage);container.replaceChildren(wrap);
+  const fail=e=>{status.textContent=e.message;};
+  try{
+    if(['review','published','assist'].includes(view)&&!admin){stage.append(el('p',{text:'这个页面仅管理员可以使用。'}));return;}
+    if(view==='assist'){
+      stage.append(el('h2',{text:'一起把喵喵屋做得更好'}),el('p',{class:'muted',text:'描述想改进的界面或文章，DeepSeek 会给出建议。'}));
+      const input=el('textarea',{class:'field-input ai-prompt',rows:7,maxlength:6000,'aria-label':'给 DeepSeek 的需求',placeholder:'例如：帮我改善知识模块页在手机上的排版…'});
+      const button=el('button',{class:'btn btn--primary',type:'button',text:'生成建议'}),output=el('pre',{class:'ai-output',hidden:true});
+      button.addEventListener('click',async()=>{button.disabled=true;status.textContent='正在生成建议…';try{const result=await api('/api/assist',{method:'POST',body:{prompt:input.value}});output.textContent=result.text;output.hidden=false;status.textContent='建议已生成，可以按需要采用。';}catch(e){fail(e);}finally{button.disabled=false;}});stage.append(input,button,output);return;
+    }
+    if(view==='published'){
+      const articles=await loadArticles();stage.append(el('h2',{text:'已发布文章'}));
+      for(const article of articles){const edit=el('a',{class:'text-button',href:'/workspace/?edit='+encodeURIComponent(article.slug),text:'编辑'}),remove=el('button',{class:'text-button danger',type:'button',text:'删除'});
+        const row=el('div',{class:'submission-row'},[el('div',{},[el('a',{href:`/article/${article.slug}/`,text:article.title}),el('p',{class:'muted',text:article.moduleTitle})]),el('div',{class:'row-actions'},[edit,remove])]);
+        remove.addEventListener('click',async()=>{if(!confirm('确认删除“'+article.title+'”？删除后将从网站移除。'))return;remove.disabled=true;try{await api('/api/articles/'+article.slug,{method:'DELETE'});row.remove();status.textContent='文章已删除，网站将在部署完成后更新。';}catch(e){fail(e);remove.disabled=false;}});stage.append(row);}
+      return;
+    }
+    if(view==='submissions'||view==='review'){
+      const id=params.get('id');
+      if(id){
+        const detail=await api('/api/submissions/'+id),post=generatedPost(detail.source);
+        const mediaBase=/^https:\/\/raw\.githubusercontent\.com\/[\w.-]+\/[\w.-]+\/[a-f0-9]{40}\/$/.test(detail.mediaBase||'')?detail.mediaBase:null;
+        const mediaUrl=path=>mediaBase&&/^\/?assets\/(images|files)\//.test(path)?mediaBase+path.replace(/^\//,''):path;
+        const prose=el('div',{class:'prose review-prose',html:renderMarkdown(post.body).html});
+        for(const image of prose.querySelectorAll('img'))image.src=mediaUrl(image.getAttribute('src')||'');
+        for(const link of prose.querySelectorAll('a')){const href=link.getAttribute('href')||'';if(/^\/?assets\//.test(href)){link.href=mediaUrl(href);link.target='_blank';link.rel='noopener noreferrer';}}
+        stage.append(el('h2',{text:post.title||detail.title}),el('p',{class:'muted',text:'投稿人：'+detail.author}),prose);
+        if(post.images?.length)stage.append(el('div',{class:'review-media'},post.images.map(image=>el('figure',{},[el('img',{src:mediaUrl(image.src),alt:image.caption||'',loading:'lazy'}),el('figcaption',{text:image.caption||''})]))));
+        if(post.attachments?.length)stage.append(el('ul',{class:'review-files'},post.attachments.map(file=>el('li',{},[el('a',{href:mediaUrl(file.file),text:file.title||file.file.split('/').pop(),target:'_blank',rel:'noopener noreferrer'})]))));
+        if(detail.files?.length)stage.append(el('details',{class:'review-details'},[el('summary',{text:'查看本次修改的文件（'+detail.files.length+'）'}),el('ul',{class:'review-files'},detail.files.map(file=>el('li',{text:file.path})))]));
+        if(admin&&detail.state==='open'){
+          const publish=el('button',{class:'btn btn--primary',type:'button',text:'审核通过并发布'}),reject=el('button',{class:'btn btn--ghost danger',type:'button',text:'退回投稿'});
+          for(const [button,action]of [[publish,'publish'],[reject,'reject']])button.addEventListener('click',async()=>{if(action==='reject'&&!confirm('确认退回这篇投稿？'))return;publish.disabled=reject.disabled=true;try{await api('/api/submissions/'+id+'/review',{method:'POST',body:{action,sha:detail.sha}});status.textContent=action==='publish'?'审核通过，文章将在网站部署完成后显示。':'投稿已退回。';}catch(e){fail(e);publish.disabled=reject.disabled=false;}});
+          stage.append(el('div',{class:'editor-actions'},[publish,reject]));
+        }else if(detail.state==='open'&&detail.author.toLowerCase()===user.login.toLowerCase())stage.append(el('a',{class:'btn btn--primary',href:'/workspace/?submission='+id,text:'继续编辑'}));
+        return;
+      }
+      stage.append(el('h2',{text:view==='review'?'等待你审核的文章':admin?'全部投稿':'我的投稿'}));
+      let page=1;const rows=el('div',{class:'submission-list'}),more=el('button',{class:'btn btn--ghost',type:'button',text:'加载更多'});stage.append(rows,more);
+      const load=async()=>{more.disabled=true;try{const result=await api('/api/submissions?page='+page++);const items=result.items.filter(x=>view!=='review'||x.state==='pending');for(const item of items)rows.append(el('div',{class:'submission-row'},[el('div',{},[el('a',{href:`/workspace/${admin?'review':'submissions'}/?id=${item.number}`,text:item.title}),el('p',{class:'muted',text:item.author+' · '+item.date.slice(0,10)})]),el('span',{class:'submission-state',text:labels[item.state]})]));more.hidden=!result.hasMore;if(!rows.children.length&&!result.hasMore)rows.append(el('p',{class:'empty',text:view==='review'?'现在没有等待审核的文章。':'还没有投稿，去写下第一篇吧。'}));}catch(e){fail(e);}finally{more.disabled=false;}};more.addEventListener('click',load);await load();return;
+    }
+    const modules=await loadModules(),draftKey='lemoncat-draft:'+user.login;
+    let post={slug:'',title:'',summary:'',module:'misc',date:today(),updated:today(),tags:[],body:'',images:[],attachments:[]},submission=null;
+    const editing=params.get('edit'),pending=params.get('submission');
+    if(editing){const articles=await loadArticles(),article=articles.find(a=>a.slug===editing);if(!article)throw new Error('没有找到这篇文章。');post={...post,...article,body:await loadArticleBody(editing),updated:today()};}
+    else if(pending){submission=await api('/api/submissions/'+pending);if(submission.author.toLowerCase()!==user.login.toLowerCase()||submission.state!=='open')throw new Error('只能编辑自己尚未审核的稿件。');post={...post,...generatedPost(submission.source),updated:today()};}
+    else{try{const saved=JSON.parse(localStorage.getItem(draftKey));if(saved)post={...post,...saved};}catch{}}
+    const fields={},form=el('form',{class:'editor-form'}),files=[],resources=el('div',{class:'upload-list'}),preview=el('div',{class:'prose editor-preview',hidden:true});
+    const field=(name,label,tag='input',attrs={})=>{const input=el(tag,{class:'field-input',...(tag==='input'?{type:'text'}:{}),...attrs});if(tag!=='select')input.value=name==='tags'?(post.tags||[]).join(', '):post[name]||'';fields[name]=input;return el('label',{class:'field'},[el('span',{text:label}),input]);};
+    const title=field('title','文章标题','input',{required:true,maxlength:160,placeholder:'给今天的发现起个名字'});
+    const body=field('body','正文','textarea',{required:true,rows:18,placeholder:'从这里开始写。支持 Markdown、代码、数学公式…'});
+    const slug=field('slug','文章地址','input',{required:true,pattern:'[a-z0-9]+(-[a-z0-9]+)*',maxlength:100,placeholder:'例如 my-study-notes',...(editing||pending?{readonly:true}:{})});
+    const module=field('module','知识模块','select');for(const m of modules)fields.module.append(el('option',{value:m.slug,text:m.title}));fields.module.value=post.module;
+    const summary=field('summary','摘要','textarea',{rows:3,maxlength:1000,placeholder:'一两句话介绍这篇文章'}),date=field('date','首次发布日期','input',{type:'date',required:true}),tags=field('tags','标签','input',{placeholder:'用逗号分隔'});
+    const fileInput=el('input',{type:'file',multiple:true,hidden:true,accept:'.png,.jpg,.jpeg,.gif,.webp,.avif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.zip,.mp4,.webm,.ogv,.mp3,.m4a,.wav,.ogg,.oga,.flac'});
+    const upload=el('button',{class:'btn btn--ghost',type:'button',text:'添加图片或附件'}),previewButton=el('button',{class:'text-button',type:'button',text:'预览正文'});upload.addEventListener('click',()=>fileInput.click());
+    const collect=()=>({...post,slug:fields.slug.value.trim(),title:fields.title.value.trim(),summary:fields.summary.value,module:fields.module.value,date:fields.date.value,updated:today(),tags:fields.tags.value.split(/[,，]/).map(x=>x.trim()).filter(Boolean),body:fields.body.value});
+    const saveDraft=debounce(()=>{if(!editing&&!pending){try{localStorage.setItem(draftKey,JSON.stringify({...collect(),images:post.images.filter(x=>!files.some(f=>'/'+f.path===x.src)),attachments:post.attachments.filter(x=>!files.some(f=>'/'+f.path===x.file))}));}catch{}}},400);form.addEventListener('input',saveDraft);
+    const drawFiles=()=>{resources.replaceChildren();for(const [key,list,label]of [['images',post.images,'图片'],['attachments',post.attachments,'附件']])for(const record of list){const path=record.src||record.file,button=el('button',{class:'text-button',type:'button',text:'移除','aria-label':'移除 '+path});button.addEventListener('click',()=>{list.splice(list.indexOf(record),1);const i=files.findIndex(f=>'/'+f.path===path);if(i>=0)files.splice(i,1);drawFiles();saveDraft();});resources.append(el('div',{class:'upload-row'},[el('span',{text:label+' · '+(record.caption||record.title||path.split('/').pop())}),button]));}};
+    fileInput.addEventListener('change',async()=>{upload.disabled=true;try{for(const file of fileInput.files){const ext=file.name.split('.').pop().toLowerCase(),image=['png','jpg','jpeg','gif','webp','avif'].includes(ext),max=(image?10:20)*1024*1024;
+      if(file.size>max||files.reduce((n,f)=>n+f.size,0)+file.size>20*1024*1024||files.length>=12)throw new Error('图片最多 10 MB、附件最多 20 MB，一次最多 12 个文件且总计 20 MB。');
+      const content=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=reject;reader.readAsDataURL(file);});
+      const safeName=(file.name.slice(0,-ext.length-1).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'file')+'-'+crypto.randomUUID()+'.'+ext;
+      const path=`assets/${image?'images':'files'}/uploads/${safeName}`;files.push({path,content,size:file.size});(image?post.images:post.attachments).push(image?{src:'/'+path,caption:file.name}:{file:'/'+path,title:file.name});
+    }drawFiles();status.textContent='文件已加入本次稿件，提交时一起上传。';}catch(e){fail(e);}finally{fileInput.value='';upload.disabled=false;}});
+    previewButton.addEventListener('click',()=>{preview.hidden=!preview.hidden;body.hidden=!preview.hidden;previewButton.textContent=preview.hidden?'预览正文':'继续编辑';if(!preview.hidden)preview.innerHTML=renderMarkdown(fields.body.value).html;});
+    const submit=el('button',{class:'btn btn--primary',type:'submit',text:admin?'发布文章':pending?'更新投稿':'提交审核'});
+    form.addEventListener('submit',async event=>{event.preventDefault();submit.disabled=true;upload.disabled=true;status.textContent=admin?'正在发布文章…':'正在上传并提交审核…';try{
+      const result=await api(admin?'/api/articles':pending?'/api/submissions/'+pending:'/api/submissions',{method:pending&&!admin?'PATCH':'POST',body:{post:collect(),files:files.map(({size,...f})=>f),...(submission?{sha:submission.sha}:{})}});
+      if(submission&&result.sha)submission.sha=result.sha;
+      localStorage.removeItem(draftKey);files.length=0;status.textContent=admin?'文章已发布，网站将在部署完成后更新。':'投稿已提交，等待 Lemoncat 审核。';
+      // Lock the submitted form so attachments are not accidentally resubmitted without their bytes.
+      for(const input of form.querySelectorAll('input,textarea,select,button'))input.disabled=true;
+      status.append(' ',el('a',{href:'/workspace/submissions/',text:'查看投稿'}));
+    }catch(e){fail(e);submit.disabled=upload.disabled=false;}});
+    form.append(el('div',{class:'editor-main'},[title,el('div',{class:'editor-toolbar'},[upload,previewButton,fileInput]),body,preview]),el('aside',{class:'editor-details'},[slug,module,summary,date,tags,resources,el('p',{class:'field-hint',text:admin?'发布后会更新网站内容。':'提交的稿件与附件会进入公开仓库，审核通过后才显示在本站。'}),submit]));drawFiles();stage.append(form);
+  }catch(e){fail(e);}
+}

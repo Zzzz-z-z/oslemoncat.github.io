@@ -1,11 +1,16 @@
 <!DOCTYPE html>
 <html lang="zh-CN" data-theme="light">
 <head>
+<base href="/">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>页面不存在 · Lemoncat的喵喵屋</title>
-<meta name="robots" content="noindex">
+<title>Lemoncat的喵喵屋</title>
+<meta name="description" content="数学分析、线性代数、程序设计等课程学习笔记的整理与归档。">
+<meta name="author" content="oslemoncat">
+<meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg?v=4">
+
+<!-- 首屏提前定主题，避免暗色用户看到白闪 -->
 <script>
   (function () {
     try {
@@ -14,22 +19,27 @@
         ? stored
         : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       document.documentElement.setAttribute('data-theme', theme);
-    } catch (e) {}
-    // 静态托管下，未知路径会落到这个页面。
-    // 把路径转成 hash 路由，交给首页的 JS 决定渲染什么（找不到就显示「页面不存在」）。
-    var path = location.pathname.replace(/\/+$/, '');
-    var base = (document.baseURI || location.href).replace(/[^/]*$/, '');
-    var basePath = new URL(base).pathname.replace(/\/+$/, '');
-    if (basePath && path.indexOf(basePath) === 0) path = path.slice(basePath.length);
-    location.replace(base + '#/notfound' + path);
+    } catch (e) { /* 隐私模式下 localStorage 可能不可用 */ }
   })();
 </script>
+
 <link rel="stylesheet" href="assets/css/site.css">
+<link rel="stylesheet" href="assets/css/lemoncat.css">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 </head>
 <body>
+<a class="skip-link" href="#content">跳到正文</a>
 <header class="site-header" id="site-header"></header>
 <main id="content"></main>
 <footer class="site-footer" id="site-footer"></footer>
+<noscript>
+  <div class="wrap">
+    <div class="empty">
+      <p>这个站点用 JavaScript 渲染内容，需要启用 JavaScript 才能查看。</p>
+    </div>
+  </div>
+</noscript>
 <script type="module" src="app.js"></script>
+<script src="lemon-cat/lemon-cat.js" data-size="144" defer></script>
 </body>
 </html>

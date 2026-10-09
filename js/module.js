@@ -31,7 +31,7 @@ export async function renderModule(container, slug) {
     ]),
     module.articles.length
       ? articleList(module.articles)
-      : emptyState('这个模块还没有文章', `新增文章时把 <code>"module"</code> 设为 <code>"${module.slug}"</code> 即可归入这里。`),
+      : emptyState('这个模块还没有文章', '在写作区选择这个知识模块，就可以提交第一篇文章。'),
   ]));
 
   container.appendChild(wrap);

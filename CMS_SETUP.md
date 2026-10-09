@@ -1,3 +1,5 @@
+> 新版统一登录、投稿审核与 DeepSeek 设置见 [PORTAL_SETUP.md](PORTAL_SETUP.md)。本页保留旧版 `/admin/` 接入说明，首页已改为单一登录入口。
+
 # 在自己的网站编辑和发布文章
 
 此接入包对应 `oslemoncat/oslemoncat.github.io` 当前网站。网站继续放在 GitHub Pages，文章后台位于 `https://oslemoncat.github.io/admin/`，Cloudflare Worker 只负责 GitHub 登录认证。

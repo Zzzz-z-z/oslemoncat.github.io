@@ -1,22 +1,17 @@
-/* 应用入口：hash 路由、页头页脚挂载、页面分发。
-   URL 形式：
-     #/                     首页
-     #/modules              知识模块总览
-     #/module/<slug>        单个模块
-     #/articles[?module=&q=] 全部文章（可带筛选参数）
-     #/article/<slug>       文章详情
-     #/about                关于
-
-   结构上把「启动」拆成 startApp(deps) + boot()：
-   startApp 接受注入的 document/window/loader 等依赖，因此脚本化测试
-   （scripts/render-test.mjs）可以在真实 DOM 骨架里跑同一条代码路径。 */
+/* 应用入口：独立路径路由、统一登录、页头页脚和页面分发。
+   构建为模块、文章、登录与写作区生成对应 HTML。旧 #/ 链接会跳到新路径。
+   startApp 可注入测试依赖；boot 启用真实登录检查。 */
 import { detectBase, el } from './assets/js/util.js';
 import { loadSite, loadArticles } from './assets/js/content.js';
 import { renderHeader, renderFooter } from './assets/js/layout.js';
 import { initTheme } from './assets/js/theme.js';
+import {restoreSession} from './assets/js/auth.js';
+import {renderLogin,safeNext} from './js/login.js';
 import { initAnchorScroll } from './assets/js/toc.js';
 
 const ROUTES = [
+  {pattern:/^\/login\/?$/,page:'login',section:''},
+  {pattern:/^\/workspace(?:\/(submissions|review|published|assist))?\/?$/,page:'workspace',section:''},
   { pattern: /^\/?$/, page: 'home', section: 'home' },
   { pattern: /^\/modules\/?$/, page: 'modules', section: 'modules' },
   { pattern: /^\/module\/(.+?)\/?$/, page: 'module', section: 'modules' },
@@ -26,6 +21,8 @@ const ROUTES = [
 ];
 
 const LOADERS = {
+  workspace:()=>import('./js/workspace.js').then(m=>m.renderWorkspace),
+  login:()=>Promise.resolve(renderLogin),
   home: () => import('./js/home.js').then((mod) => mod.renderHome),
   modules: () => import('./js/modules.js').then((mod) => mod.renderModules),
   module: () => import('./js/module.js').then((mod) => mod.renderModule),
@@ -69,13 +66,15 @@ export async function startApp(deps = {}) {
   const buildInfoFn = deps.buildInfo || (() => buildInfo(doc));
 
   const site = await loadSiteFn();
+  let user=null,authError='';
+  if(deps.requireAuth){try{user=await restoreSession();}catch(e){authError=e.message;}win.__LEMONCAT_USER__=user;}
 
   const headerMount = doc.getElementById('site-header');
   const footerMount = doc.getElementById('site-footer');
   const content = doc.getElementById('content');
   if (!content) throw new Error('index.html 缺少 #content 容器');
 
-  const { header, themeBtn, toggle, nav } = renderHeader(site, '');
+  const { header, themeBtn, toggle, nav } = renderHeader(site, '', user);
   if (headerMount) headerMount.replaceWith(header);
   if (footerMount) footerMount.replaceWith(renderFooter(site, buildInfoFn()));
 
@@ -99,13 +98,16 @@ export async function startApp(deps = {}) {
   initAnchorScroll(content);
 
   async function route() {
-    const { path, params } = parseHash(win.location ? win.location.hash : location.hash);
+    let {path,params}=parseHash(win.location?.hash);
+    if(!win.location?.hash?.startsWith('#/')){path=(win.location?.pathname||'/').slice((win.__OSC_BASE__||'/').length-1)||'/';if(path.length>1)path=path.replace(/\/+$/,'');params=new URLSearchParams(win.location?.search||'');}
+    if(deps.requireAuth&&!user&&path!=='/login'){win.location.replace('/login/?next='+encodeURIComponent(path+(params.size?'?'+params:'')));return;}
+    if(deps.requireAuth&&user&&path==='/login'){win.location.replace(safeNext(params.get('next')));return;}
     const matched = matchRoute(path);
     const section = matched ? matched.section : '';
     const page = matched ? matched.page : 'notfound';
 
     nav.querySelectorAll('a').forEach((link) => {
-      const key = (link.getAttribute('href') || '').replace(/^#\//, '').split('/')[0] || 'home';
+      const key = (link.getAttribute('href') || '').replace(/^#?\//, '').split('/')[0] || 'home';
       if (key === section) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
     });
@@ -136,6 +138,8 @@ export async function startApp(deps = {}) {
           ]),
           el('p', {}, [el('a', { class: 'btn btn--primary', href: '#/', text: '回到首页' })]),
         ]));
+      } else if(page==='login'){await render(content,params,authError);
+      } else if(page==='workspace'){if(matched.arg)params.set('view',matched.arg);await render(content,params);
       } else if (page === 'articles') {
         await render(content, params);
       } else if (page === 'module' || page === 'article') {
@@ -158,9 +162,6 @@ export async function startApp(deps = {}) {
     if (page !== 'article') doc.title = site.title;
   }
 
-  if (win.location && !win.location.hash && win.history) {
-    win.history.replaceState(null, '', `${win.location.pathname}${win.location.search}#/`);
-  }
   win.addEventListener('hashchange', route);
 
   // 预取文章索引，让筛选/列表更快，也提前暴露数据问题
@@ -171,8 +172,9 @@ export async function startApp(deps = {}) {
 }
 
 async function boot() {
-  window.__OSC_BASE__ = detectBase();
-  await startApp();
+  window.__OSC_BASE__=new URL('./',import.meta.url).pathname;
+  if(location.hash.startsWith('#/')){const r=parseHash(location.hash);location.replace(r.path.replace(/\/$/,'')+'/'+(r.params.size?'?'+r.params:''));return;}
+  await startApp({requireAuth:true});
 }
 
 boot().catch((error) => {

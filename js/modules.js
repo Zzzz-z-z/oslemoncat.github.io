@@ -18,7 +18,7 @@ export async function renderModules(container) {
     ));
   } else {
     wrap.appendChild(el('section', { class: 'section' }, [
-      el('div', { class: 'grid grid--wide' }, decorated.map(moduleCard)),
+      el('div', { class: 'grid grid--wide' }, decorated.map((m,i)=>moduleCard(m,i))),
     ]));
   }
 

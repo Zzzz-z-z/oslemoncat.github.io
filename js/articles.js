@@ -83,7 +83,7 @@ export async function renderArticles(container, params = {}) {
     if (activeModule !== 'all') query.set('module', activeModule);
     if (keyword.trim()) query.set('q', keyword.trim());
     const suffix = query.toString();
-    history.replaceState(null, '', `${location.pathname}${location.search}#/articles${suffix ? `?${suffix}` : ''}`);
+    history.replaceState(null, '', `/articles/${suffix ? `?${suffix}` : ''}`);
   }
 
   apply();

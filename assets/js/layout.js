@@ -3,7 +3,7 @@ import { el, formatDate, latestDate, resolveUrl, escapeHtml } from './util.js';
 import { icon } from './theme.js';
 
 /* ------------------------------------------------------------------ 页头 */
-export function renderHeader(site, activeSection = '') {
+export function renderHeader(site, activeSection = '', user = null) {
   const navLinks = (site.nav || []).map((item) => {
     const key = (item.href || '').replace(/^#\//, '').split('/')[0] || 'home';
     const isActive = key === activeSection;
@@ -29,11 +29,11 @@ export function renderHeader(site, activeSection = '') {
   const header = el('header', { class: 'site-header' }, [
     el('div', { class: 'wrap site-header__inner' }, [
       el('a', { class: 'brand', href: '#/' }, [
-        el('span', { class: 'brand__mark', text: (site.shortTitle || 'OS').slice(0, 2).toUpperCase() }),
+        el('img',{class:'brand__mark',src:'/assets/images/favicon.svg?v=4',alt:'',width:48,height:48}),
         el('span', { text: site.shortTitle || site.title }),
       ]),
       nav,
-      el('div', { class: 'header-actions' }, [themeBtn, toggle]),
+      el('div',{class:'header-actions'},[themeBtn,el('a',{class:'account-link',href:user?'/workspace/':'/login/','aria-label':user?'进入写作区':'登录'},user?[el('img',{src:user.avatar||'/assets/images/favicon.svg?v=4',alt:'',width:36,height:36}),el('span',{text:user.login})]:[el('span',{text:'登录'})]),toggle]),
     ]),
   ]);
 
@@ -44,7 +44,7 @@ export function renderFooter(site, buildInfo = '') {
   const children = [
     el('span', { text: `© ${new Date().getFullYear()} ${site.author || site.shortTitle || ''}` }),
     el('span', { text: site.footer?.note || '' }),
-    el('span', { html: `构建信息：<code>${escapeHtml(buildInfo)}</code>` }),
+
   ];
   if (site.footer?.icp) children.push(el('span', { text: site.footer.icp }));
   return el('footer', { class: 'site-footer' }, [el('div', { class: 'wrap site-footer__inner' }, children)]);
@@ -84,19 +84,7 @@ export function tagList(tags = []) {
 }
 
 /* ------------------------------------------------------------ 模块卡片 */
-export function moduleCard(module) {
-  return el('article', { class: 'card card--module', style: `--card-accent:${module.accent}` }, [
-    el('div', { class: 'card__accent' }),
-    el('h3', { class: 'card__title' }, [el('a', { href: `#/module/${module.slug}`, text: module.title })]),
-    module.subtitle ? el('p', { class: 'card__desc', text: module.subtitle }) : null,
-    el('p', { class: 'card__desc', text: module.description }),
-    el('div', { class: 'card__meta' }, [
-      el('span', { class: 'card__count', text: `${module.count ?? 0} 篇` }),
-      module.latest ? el('span', { text: `最近 ${formatDate(module.latest)}` }) : null,
-    ]),
-  ]);
-}
-
+export function moduleCard(module,index=0){return el('article',{class:'card card--module'},[el('span',{class:'module-number',text:String(index+1).padStart(2,'0')}),el('div',{class:'module-copy'},[el('h3',{class:'card__title'},[el('a',{href:`#/module/${module.slug}`,text:module.title})]),el('p',{class:'card__desc',text:module.subtitle||module.description})]),el('span',{class:'module-count',text:`${module.count??0} 篇文章`})]);}
 /* ------------------------------------------------------------ 文章卡片 */
 export function articleCard(article, base) {
   const cover = article.cover

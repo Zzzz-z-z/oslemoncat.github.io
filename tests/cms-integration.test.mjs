@@ -57,7 +57,10 @@ test('New articles populate both indexes and hidden posts are excluded', async (
     const config = YAML.parse(await readFile(path.join(out, 'admin/config.yml'), 'utf8'));
     assert.deepEqual(config.collections[0].fields.find(x => x.name === 'module').options, [{ label: '数学分析', value: 'math-analysis' }]);
     const site = JSON.parse(await readFile(path.join(out, 'content/site.json'), 'utf8'));
-    assert.ok(site.nav.some(x => x.href === 'admin/'));
+    assert.ok(!site.nav.some(x => x.href === 'admin/'));
+    await access(path.join(out,'login/index.html'));
+    await access(path.join(out,'workspace/review/index.html'));
+    await access(path.join(out,'article/published/index.html'));
   } finally { await cleanup(root); }
 });
 test('Unknown modules and changed slugs fail before publication', async () => {

@@ -7,6 +7,7 @@
  *  静态服务器会返回 404 页面（HTML），于是 JSON 解析报
  *  "Unexpected token '<'"。本地 file:// 直接打开时同样可用。 */
 export function detectBase() {
+  if(typeof window !== 'undefined' && window.__OSC_BASE__)return window.__OSC_BASE__;
   const pathname = (typeof location !== 'undefined' && location.pathname) || '/';
   return pathname.replace(/[^/]*$/, '');
 }
@@ -37,6 +38,8 @@ export function el(tag, attrs = {}, children = []) {
     if (child === null || child === undefined || child === false) continue;
     node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
   }
+  if(tag==='a' && node.getAttribute('href')?.startsWith('#/')){const [route,query]=node.getAttribute('href').slice(1).split('?');node.setAttribute('href',route.replace(/\/$/,'')+'/' +(query?'?'+query:''));}
+  if(tag==='a' && /^\/(?:$|modules\/|module\/|articles\/|article\/|about\/|workspace\/|login\/)/.test(node.getAttribute('href')||'')){node.setAttribute('target','_blank');node.setAttribute('rel','noopener noreferrer');}
   return node;
 }
 
