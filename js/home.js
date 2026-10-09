@@ -20,6 +20,7 @@ export async function renderHome(container) {
       el('div', { class: 'hero__actions' }, [
         el('a', { class: 'btn btn--primary', href: '#/modules' }, ['浏览知识模块']),
         el('a', { class: 'btn btn--ghost', href: '#/articles' }, ['全部文章']),
+        el('a', { class: 'btn btn--ghost', href: 'admin/' }, ['管理后台']),
       ]),
     ]),
   ]);

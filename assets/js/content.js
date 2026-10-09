@@ -103,6 +103,8 @@ export function loadArticles() {
           updated: normalizeDate(meta.updated),
           tags: Array.isArray(meta.tags) ? meta.tags : [],
           cover: meta.cover || '',
+          images: Array.isArray(meta.images) ? meta.images : [],
+          attachments: Array.isArray(meta.attachments) ? meta.attachments : [],
           draft: meta.draft === true,
           order: Number.isFinite(meta.order) ? meta.order : 0,
           video: meta.video || null,

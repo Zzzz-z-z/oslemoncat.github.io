@@ -53,7 +53,14 @@ collections:
       - { label: 首次发布日期, name: date, widget: datetime, format: YYYY-MM-DD, date_format: YYYY-MM-DD, time_format: false }
       - { label: 更新日期, name: updated, widget: datetime, format: YYYY-MM-DD, date_format: YYYY-MM-DD, time_format: false }
       - { label: 标签, name: tags, widget: list, required: false }
-      - { label: 封面图, name: cover, widget: image, required: false }
+      - label: 封面图
+        name: cover
+        widget: image
+        required: false
+        hint: 点击“选择图片”后上传，单张图片不超过 10 MB。
+        media_library:
+          allow_multiple: false
+          config: { max_file_size: 10485760 }
       - { label: 同日排序权重, name: order, widget: number, value_type: int, default: 0, required: false }
       - label: 暂时隐藏文章
         name: draft
@@ -64,6 +71,44 @@ collections:
         name: body
         widget: markdown
         hint: '公式与 ::: 定理/视频块请使用 Markdown 源码模式编辑；语法沿用现有网站。'
+      - label: 文章图片
+        name: images
+        widget: list
+        label_singular: 图片
+        required: false
+        default: []
+        collapsed: true
+        summary: '{{fields.caption}} · {{fields.src}}'
+        hint: 添加图片后，发布的文章正文下方会显示图片；正文中插图也可以使用编辑器工具栏。
+        fields:
+          - label: 图片文件
+            name: src
+            widget: image
+            media_library:
+              allow_multiple: false
+              config: { max_file_size: 10485760 }
+            hint: 支持 JPG、PNG、WebP、GIF 等图片，单张不超过 10 MB。
+          - { label: 图片说明, name: caption, widget: string, required: false }
+      - label: 附件与音视频
+        name: attachments
+        widget: list
+        label_singular: 附件
+        required: false
+        default: []
+        collapsed: true
+        summary: '{{fields.title}} · {{fields.file}}'
+        hint: 支持 PDF、Word、Excel、PPT、TXT、ZIP，以及音视频文件。单个文件不超过 20 MB，发布后会显示下载入口。
+        fields:
+          - { label: 显示名称, name: title, widget: string, required: false, hint: 不填写时显示文件名。 }
+          - label: 文件
+            name: file
+            widget: file
+            media_folder: /assets/files/uploads
+            public_folder: /assets/files/uploads
+            media_library:
+              allow_multiple: false
+              config: { max_file_size: 20971520 }
+            hint: 点击“选择文件”后上传，也可以填写已有文件的网址。
 
   - name: settings
     label: 网站设置

@@ -45,6 +45,67 @@ function relativeTime(dateString) {
   return `${Math.floor(days / 365)} 年前`;
 }
 
+function resourceUrl(value, base) {
+  if (typeof value !== 'string') return '';
+  const raw = value.trim();
+  if (!raw || /[\u0000-\u001f\u007f\\]/.test(raw) || raw.startsWith('#')) return '';
+  if (/^[a-z][a-z\d+.-]*:/i.test(raw) && !/^https?:\/\//i.test(raw)) return '';
+  const url = resolveUrl(raw, base);
+  try {
+    const parsed = new URL(url, location.origin);
+    return ['http:', 'https:'].includes(parsed.protocol) ? url : '';
+  } catch { return ''; }
+}
+
+function renderResources(article, base) {
+  const sections = [];
+  const images = (article.images || []).flatMap(item => {
+    const url = resourceUrl(item?.src, base);
+    if (!url) return [];
+    return [el('figure', { class: 'article-image' }, [
+      el('a', { href: url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': item.caption || '查看完整图片' }, [
+        el('img', { src: url, alt: item.caption || article.title, loading: 'lazy', decoding: 'async' }),
+      ]),
+      item.caption ? el('figcaption', { text: item.caption }) : null,
+    ])];
+  });
+  if (images.length) sections.push(el('section', { class: 'article-resources', 'aria-label': '文章图片' }, [
+    el('h2', { text: '文章图片' }), el('div', { class: 'article-images' }, images),
+  ]));
+
+  const attachments = (article.attachments || []).flatMap(item => {
+    const url = resourceUrl(item?.file, base);
+    if (!url) return [];
+    const pathname = new URL(url, location.origin).pathname;
+    let filename = pathname.split('/').pop() || '附件';
+    try { filename = decodeURIComponent(filename); } catch { /* Keep the original filename. */ }
+    const extension = (pathname.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
+    const title = item.title || filename;
+    let preview = null;
+    if (['mp4', 'webm', 'ogv'].includes(extension)) {
+      preview = el('video', { src: url, controls: true, preload: 'none', playsinline: true, 'aria-label': title });
+    } else if (['mp3', 'm4a', 'wav', 'ogg', 'oga', 'flac'].includes(extension)) {
+      preview = el('audio', { src: url, controls: true, preload: 'none', 'aria-label': title });
+    } else if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'svg'].includes(extension)) {
+      preview = el('img', { src: url, alt: title, loading: 'lazy', decoding: 'async' });
+    }
+    return [el('li', { class: 'article-attachment' }, [
+      el('div', { class: 'article-attachment__header' }, [
+        el('div', {}, [
+          el('a', { class: 'article-attachment__title', href: url, target: '_blank', rel: 'noopener noreferrer', text: title }),
+          el('span', { class: 'article-attachment__type', text: extension ? extension.toUpperCase() : '文件' }),
+        ]),
+        el('a', { class: 'btn btn--ghost', href: url, download: filename, text: '下载', 'aria-label': `下载 ${title}` }),
+      ]),
+      preview,
+    ])];
+  });
+  if (attachments.length) sections.push(el('section', { class: 'article-resources', 'aria-label': '附件与音视频' }, [
+    el('h2', { text: '附件与音视频' }), el('ul', { class: 'article-attachments' }, attachments),
+  ]));
+  return sections;
+}
+
 export async function renderArticle(container, slug, options = {}) {
   const [site, articles] = await Promise.all([loadSite(), loadArticles()]);
   const article = findArticle(articles, slug);
@@ -129,7 +190,7 @@ export async function renderArticle(container, slug, options = {}) {
     }),
   ]);
 
-  const articleEl = el('article', { class: 'article' }, [header, prose, footer]);
+  const articleEl = el('article', { class: 'article' }, [header, prose, ...renderResources(article, base), footer]);
   const toc = buildToc(rendered.headings);
   const layout = el('div', { class: 'article-layout' }, [articleEl, toc]);
   wrap.appendChild(layout);

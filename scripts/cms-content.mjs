@@ -31,6 +31,14 @@ export async function readPosts(root) {
     if (meta.tags != null && (!Array.isArray(meta.tags) || meta.tags.some(x => typeof x !== 'string'))) throw new Error(`${file} tags 必须为文本数组`);
     if (meta.order != null && !Number.isFinite(meta.order)) throw new Error(`${file} order 必须为数字`);
     if (meta.draft != null && typeof meta.draft !== 'boolean') throw new Error(`${file} draft 必须为布尔值`);
+    for (const [field, source, description] of [['images', 'src', '文章图片'], ['attachments', 'file', '附件']]) {
+      if (meta[field] == null) continue;
+      if (!Array.isArray(meta[field]) || meta[field].some(item => !item || typeof item !== 'object' || Array.isArray(item)
+        || typeof item[source] !== 'string' || !item[source].trim()
+        || ['title', 'caption'].some(key => item[key] != null && typeof item[key] !== 'string'))) {
+        throw new Error(`${file} 的${description}列表格式无效，或缺少文件地址`);
+      }
+    }
     if (!body.trim()) throw new Error(`${file} 正文不能为空`);
     posts.push({ slug, meta, body });
   }

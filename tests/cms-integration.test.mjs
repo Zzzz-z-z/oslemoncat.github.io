@@ -69,3 +69,35 @@ test('Unknown modules and changed slugs fail before publication', async () => {
     await assert.rejects(readPosts(root), /slug 必须/);
   } finally { await cleanup(root); }
 });
+
+test('Published article resources keep their references and uploaded files', async () => {
+  const root = await fixture();
+  try {
+    const images = [{ src: '/assets/images/uploads/diagram.png', caption: '示意图' }];
+    const attachments = [{ title: '讲义', file: '/assets/files/uploads/notes.pdf' }, { file: '/assets/files/uploads/slides.pptx' }];
+    await mkdir(path.join(root, 'assets/images/uploads'), { recursive: true });
+    await mkdir(path.join(root, 'assets/files/uploads'), { recursive: true });
+    const binary = Buffer.from([0, 128, 255, 10]);
+    await writeFile(path.join(root, 'assets/images/uploads/diagram.png'), binary);
+    for (const filename of ['notes.pdf', 'slides.pptx']) await writeFile(path.join(root, 'assets/files/uploads', filename), binary);
+    await savePost(root, 'with-resources', { ...metadata('with-resources'), images, attachments }, '带附件的正文');
+    const out = path.join(root, 'dist');
+    await buildSite(root, out);
+    const meta = JSON.parse(await readFile(path.join(out, 'content/articles/with-resources.json'), 'utf8'));
+    assert.deepEqual(meta.images, images);
+    assert.deepEqual(meta.attachments, attachments);
+    for (const resource of [...images.map(x => x.src), ...attachments.map(x => x.file)]) {
+      assert.deepEqual(await readFile(path.join(out, resource.slice(1))), binary);
+    }
+  } finally { await cleanup(root); }
+});
+
+test('Incomplete image and attachment records fail before publication', async () => {
+  const root = await fixture();
+  try {
+    await savePost(root, 'incomplete', { ...metadata('incomplete'), attachments: [{ title: '没有文件' }] }, '正文');
+    await assert.rejects(readPosts(root), /附件.*缺少文件地址/);
+    await savePost(root, 'incomplete', { ...metadata('incomplete'), images: [{ src: 123 }] }, '正文');
+    await assert.rejects(readPosts(root), /文章图片.*缺少文件地址/);
+  } finally { await cleanup(root); }
+});

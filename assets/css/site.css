@@ -471,6 +471,23 @@ main { flex: 1 0 auto; padding-bottom: 64px; }
 }
 .article__cover img { width: 100%; }
 
+.article-resources { margin: 32px 0; padding-top: 24px; border-top: 1px solid var(--border); }
+.article-resources h2 { margin: 0 0 16px; font-size: 20px; }
+.article-images { display: grid; gap: 20px; }
+.article-image { margin: 0; }
+.article-image img { display: block; width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.article-image figcaption { margin-top: 8px; color: var(--text-muted); font-size: 14px; text-align: center; overflow-wrap: anywhere; }
+.article-attachments { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.article-attachment { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elevated); }
+.article-attachment__header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.article-attachment__header > div { flex: 1; min-width: 0; }
+.article-attachment__title { font-weight: 600; overflow-wrap: anywhere; }
+.article-attachment__type { display: block; margin-top: 4px; color: var(--text-faint); font-size: 12px; }
+.article-attachment .btn { flex: none; padding: 6px 14px; }
+.article-attachment video, .article-attachment audio { display: block; width: 100%; margin-top: 16px; }
+.article-attachment video, .article-attachment > img { max-height: 480px; border-radius: var(--radius-sm); }
+.article-attachment > img { display: block; max-width: 100%; margin-top: 16px; object-fit: contain; }
+
 .toc {
   position: sticky;
   top: calc(var(--header-h) + 22px);
